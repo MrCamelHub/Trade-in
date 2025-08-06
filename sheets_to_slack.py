@@ -235,7 +235,18 @@ def _send_with_sdk(name, phone, tradein_date):
         print(f"✅ [SDK] KakaoTalk notification sent successfully!")
         print(f"Group ID: {response.group_info.group_id}")
         print(f"요청한 메시지 개수: {response.group_info.count.total}")
-        print(f"성공한 메시지 개수: {response.group_info.count.registered}")
+        
+        # 응답 구조 확인 및 안전한 속성 접근
+        try:
+            if hasattr(response.group_info.count, 'registered'):
+                print(f"성공한 메시지 개수: {response.group_info.count.registered}")
+            elif hasattr(response.group_info.count, 'success'):
+                print(f"성공한 메시지 개수: {response.group_info.count.success}")
+            else:
+                print(f"응답 구조: {dir(response.group_info.count)}")
+        except Exception as e:
+            print(f"응답 정보 출력 중 오류: {e}")
+        
         return True
             
     except Exception as e:
