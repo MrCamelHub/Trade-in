@@ -130,21 +130,43 @@ def append_to_sheet(data):
     
     return result
 
+@app.route('/')
+def health_check():
+    """헬스체크 엔드포인트"""
+    return {'status': 'healthy', 'service': 'Bonibello Trade-in Automation'}
+
+@app.route('/health')
+def health():
+    """상세 헬스체크 엔드포인트"""
+    return {
+        'status': 'healthy',
+        'service': 'Bonibello Trade-in Automation',
+        'features': [
+            'Slack webhook receiver',
+            'Google Sheets integration',
+            'KakaoTalk notification'
+        ]
+    }
+
 @app.route('/slack/webhook', methods=['POST'])
 def slack_webhook():
+    """슬랙 웹훅 엔드포인트 - Trade-in 신청 메시지를 받아서 구글시트에 저장"""
+    print("🔔 Slack webhook received!")
+    
     # Get the JSON data from the request
     data = request.json
-    print(f"Received webhook data: {data}")  # Debug log
+    print(f"📥 Received webhook data: {data}")  # Debug log
 
     # Handle Slack's URL verification challenge
     if data and data.get('type') == 'url_verification':
-        print(f"URL verification challenge: {data.get('challenge')}")  # Debug log
-        return jsonify({'challenge': data.get('challenge')})
+        challenge = data.get('challenge')
+        print(f"🔗 URL verification challenge: {challenge}")  # Debug log
+        return jsonify({'challenge': challenge})
 
     # Handle regular event
     if data and data.get('event'):
         event = data.get('event')
-        print(f"Received event: {event}")  # Debug log
+        print(f"📨 Received event: {event}")  # Debug log
         
         if event.get('type') == 'message':
             # Check for text in event
@@ -160,23 +182,25 @@ def slack_webhook():
             print(f"Processing message: {message}")  # Debug log
             
             if message:
+                print(f"📝 Processing message: {message}")
                 parsed_data = parse_slack_message(message)
-                print(f"Parsed data: {parsed_data}")  # Debug log
+                print(f"🔍 Parsed data: {parsed_data}")  # Debug log
                 
                 if parsed_data:
                     try:
+                        print(f"📊 Adding data to Google Sheets...")
                         result = append_to_sheet(parsed_data)
-                        print(f"Sheet update result: {result}")  # Debug log
+                        print(f"✅ Sheet update result: {result}")  # Debug log
                         return jsonify({'status': 'success', 'message': 'Data added to Google Sheets'})
                     except Exception as e:
-                        print(f"Error updating sheet: {str(e)}")  # Debug log
+                        print(f"❌ Error updating sheet: {str(e)}")  # Debug log
                         return jsonify({'status': 'error', 'message': str(e)})
                 else:
-                    print("No data parsed from message")  # Debug log
+                    print("⚠️ No data parsed from message")  # Debug log
             else:
-                print("No message text found in event or attachments")  # Debug log
+                print("⚠️ No message text found in event or attachments")  # Debug log
     
-    print("Invalid message format or no event data")  # Debug log
+    print("❌ Invalid message format or no event data")  # Debug log
     return jsonify({'status': 'error', 'message': 'Invalid message format'})
 
 if __name__ == '__main__':

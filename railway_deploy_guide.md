@@ -97,6 +97,11 @@ PORT=5000
 4. "Subscribe to bot events" → `message.channels` 추가
 5. "Save Changes"
 
+### 5-2. 웹훅 연결 확인
+1. Railway 대시보드에서 도메인 확인: `https://your-app-name.railway.app`
+2. 브라우저에서 `https://your-app-name.railway.app/health` 접속하여 서비스 상태 확인
+3. Slack Event Subscriptions에서 "Verify" 버튼 클릭하여 연결 확인
+
 ### 5-2. 권한 설정 확인
 "OAuth & Permissions" → "Scopes"에서 다음 권한 확인:
 - `chat:write`

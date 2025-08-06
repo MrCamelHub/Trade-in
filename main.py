@@ -44,7 +44,7 @@ def run_sheet_monitor():
                 break
 
 def main():
-    """메인 함수 - Flask 앱과 시트 모니터를 병렬 실행"""
+    """메인 함수 - Flask 앱을 메인으로 실행하고 시트 모니터를 백그라운드로 실행"""
     print("=" * 60)
     print("🎯 Bonibello Trade-in 자동화 시스템 시작")
     print("=" * 60)
@@ -68,12 +68,12 @@ def main():
     
     print("✅ 환경변수 확인 완료")
     
-    # Flask 앱을 별도 스레드에서 실행
-    flask_thread = threading.Thread(target=run_flask_app, daemon=True)
-    flask_thread.start()
+    # 시트 모니터링을 백그라운드 스레드로 실행
+    monitor_thread = threading.Thread(target=run_sheet_monitor, daemon=True)
+    monitor_thread.start()
     
-    # 메인 스레드에서 시트 모니터링 실행
-    run_sheet_monitor()
+    # Flask 앱을 메인 스레드에서 실행 (Railway 웹 서비스용)
+    run_flask_app()
 
 if __name__ == '__main__':
     main()
