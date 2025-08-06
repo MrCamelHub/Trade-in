@@ -84,22 +84,36 @@ def get_row_data(service, row_number):
 def send_slack_message(message):
     """슬랙으로 메시지를 보냅니다."""
     try:
-        print(f"Attempting to send message to channel: {SLACK_CHANNEL}")
-        print(f"Message content: {message}")
-        print(f"Bot token (first 10 chars): {SLACK_BOT_TOKEN[:10]}...")
+        # 채널 설정 확인
+        if not SLACK_CHANNEL:
+            print("❌ SLACK_CHANNEL 환경변수가 설정되지 않았습니다.")
+            print("💡 Railway에서 SLACK_CHANNEL 환경변수를 설정해주세요.")
+            return False
+            
+        print(f"📤 Attempting to send message to channel: {SLACK_CHANNEL}")
+        print(f"📝 Message content: {message}")
+        print(f"🔑 Bot token (first 10 chars): {SLACK_BOT_TOKEN[:10]}...")
         
         response = slack_client.chat_postMessage(
             channel=SLACK_CHANNEL,
             text=message
         )
-        print(f"Slack message sent successfully: {response['ts']}")
+        print(f"✅ Slack message sent successfully: {response['ts']}")
         return True
     except SlackApiError as e:
-        print(f"Error sending Slack message: {e.response['error']}")
-        print(f"Full error response: {e.response}")
+        print(f"❌ Error sending Slack message: {e.response['error']}")
+        print(f"📋 Full error response: {e.response}")
+        
+        # 채널 관련 오류인 경우 추가 안내
+        if e.response['error'] == 'channel_not_found':
+            print("💡 해결 방법:")
+            print("   1. Railway에서 SLACK_CHANNEL 환경변수 확인")
+            print("   2. 채널명 형식: '#채널명' 또는 'C1234567890'")
+            print("   3. 봇이 해당 채널에 초대되어 있는지 확인")
+        
         return False
     except Exception as e:
-        print(f"Unexpected error sending Slack message: {e}")
+        print(f"❌ Unexpected error sending Slack message: {e}")
         return False
 
 def format_slack_message(row_data, m_value):
@@ -211,8 +225,13 @@ def _send_with_sdk(name, phone, tradein_date):
         
         print(f"📱 [SDK] Sending KakaoTalk notification to {name} ({phone}) for pickup date: {tradein_date}")
         
-        # 알림톡 전송
-        response = message_service.send_one(message_data)
+        # 알림톡 전송 (솔라피 5.x 버전 대응)
+        try:
+            # send_one 메서드 시도
+            response = message_service.send_one(message_data)
+        except AttributeError:
+            # send 메서드로 대체 (솔라피 5.x)
+            response = message_service.send(message_data)
         
         if response.get('statusCode') == '2000':  # 성공 상태 코드
             print(f"✅ [SDK] KakaoTalk notification sent successfully: {response}")

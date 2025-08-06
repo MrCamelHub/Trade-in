@@ -77,6 +77,18 @@ def test_solapi_connection():
         message_service = SolapiMessageService(api_key, api_secret)
         print("✅ SOLAPI 서비스 인스턴스 생성 성공")
         
+        # 솔라피 5.x 버전 메서드 확인
+        try:
+            # send_one 메서드 존재 확인
+            if hasattr(message_service, 'send_one'):
+                print("✅ send_one 메서드 사용 가능 (솔라피 4.x)")
+            elif hasattr(message_service, 'send'):
+                print("✅ send 메서드 사용 가능 (솔라피 5.x)")
+            else:
+                print("⚠️ 알 수 없는 솔라피 버전")
+        except:
+            print("⚠️ 메서드 확인 중 오류")
+        
         # 실제 메시지 전송은 하지 않고 데이터 구조만 확인
         template_id = os.getenv('SOLAPI_TEMPLATE_ID')
         pf_id = os.getenv('SOLAPI_PF_ID', 'default-pf-id')
