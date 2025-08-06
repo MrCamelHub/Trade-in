@@ -1,0 +1,17 @@
+# Slack 설정
+SLACK_BOT_TOKEN=xoxb-your-bot-token-here
+SLACK_CHANNEL=#08_biz_bonibello_request
+
+# Google Sheets 설정
+SPREADSHEET_ID=your-spreadsheet-id-here
+SHEET_NAME=보니벨로 Trade-in_신청
+GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"..."}
+
+# SOLAPI 카카오톡 알림톡 설정
+SOLAPI_API_KEY=your-solapi-api-key
+SOLAPI_API_SECRET=your-solapi-api-secret
+SOLAPI_KAKAO_TEMPLATE_ID=your-template-id
+SOLAPI_TEMPLATE_ID=your-template-id
+
+# Railway 배포용 (옵션)
+PORT=5000
