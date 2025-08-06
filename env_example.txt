@@ -7,11 +7,12 @@ SPREADSHEET_ID=your-spreadsheet-id-here
 SHEET_NAME=보니벨로 Trade-in_신청
 GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"..."}
 
-# SOLAPI 카카오톡 알림톡 설정
+# SOLAPI 카카오톡 알림톡 설정 (Python SDK 사용)
 SOLAPI_API_KEY=your-solapi-api-key
 SOLAPI_API_SECRET=your-solapi-api-secret
-SOLAPI_KAKAO_TEMPLATE_ID=your-template-id
 SOLAPI_TEMPLATE_ID=your-template-id
+SOLAPI_PF_ID=your-plusfriend-id
+SOLAPI_FROM_NUMBER=070-xxxx-xxxx
 
 # Railway 배포용 (옵션)
 PORT=5000

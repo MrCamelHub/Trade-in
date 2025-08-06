@@ -15,6 +15,13 @@
 - **L열 (물류센터 도착)** 업데이트 시:
   - 슬랙에 "물류센터 도착" 메시지 전송
 
+## 🔧 최신 개선사항
+
+### ✨ 솔라피 Python SDK 적용 (v2.0)
+- 기존 직접 HTTP 요청 방식에서 **공식 Python SDK** 사용으로 변경
+- 더 안정적이고 깔끔한 카카오톡 알림톡 전송
+- 오류 처리 및 로깅 개선
+
 ## 📋 필요한 환경변수
 
 다음 환경변수들을 설정해야 합니다:
@@ -29,11 +36,12 @@ SPREADSHEET_ID=your-spreadsheet-id-here
 SHEET_NAME=보니벨로 Trade-in_신청
 GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account",...}
 
-# SOLAPI 카카오톡 알림톡 설정
+# SOLAPI 카카오톡 알림톡 설정 (Python SDK 사용)
 SOLAPI_API_KEY=your-solapi-api-key
 SOLAPI_API_SECRET=your-solapi-api-secret
-SOLAPI_KAKAO_TEMPLATE_ID=your-template-id
 SOLAPI_TEMPLATE_ID=your-template-id
+SOLAPI_PF_ID=your-plusfriend-id
+SOLAPI_FROM_NUMBER=070-xxxx-xxxx
 ```
 
 ## 🛠 로컬 실행
@@ -76,8 +84,9 @@ Railway 대시보드에서 다음 환경변수들을 설정:
 - `GOOGLE_APPLICATION_CREDENTIALS_JSON`
 - `SOLAPI_API_KEY`
 - `SOLAPI_API_SECRET`
-- `SOLAPI_KAKAO_TEMPLATE_ID`
 - `SOLAPI_TEMPLATE_ID`
+- `SOLAPI_PF_ID`
+- `SOLAPI_FROM_NUMBER`
 
 ### 4. 배포 확인
 - Railway가 자동으로 애플리케이션을 빌드하고 배포합니다

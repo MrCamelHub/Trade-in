@@ -25,8 +25,9 @@ slack_client = WebClient(token=SLACK_BOT_TOKEN)
 # SOLAPI configuration for KakaoTalk
 SOLAPI_API_KEY = os.getenv('SOLAPI_API_KEY')
 SOLAPI_API_SECRET = os.getenv('SOLAPI_API_SECRET')
-SOLAPI_KAKAO_TEMPLATE_ID = os.getenv('SOLAPI_KAKAO_TEMPLATE_ID')  # 알림톡 템플릿 ID
-SOLAPI_TEMPLATE_ID = os.getenv('SOLAPI_TEMPLATE_ID')  # 템플릿 ID (templateId)
+SOLAPI_TEMPLATE_ID = os.getenv('SOLAPI_TEMPLATE_ID')  # 알림톡 템플릿 ID
+SOLAPI_PF_ID = os.getenv('SOLAPI_PF_ID', 'KA01PF240722030442524jxhTR86GIYZ')  # 플러스친구 ID
+SOLAPI_FROM_NUMBER = os.getenv('SOLAPI_FROM_NUMBER', '070-4788-9600')  # 발신번호
 
 def get_google_sheets_service():
     # Get service account JSON from environment variable
@@ -160,92 +161,58 @@ def clean_date_string(date_str):
         return cleaned  # 오류시 정리된 원본 반환
 
 def send_kakao_notification(name, phone, tradein_date):
-    """SOLAPI를 사용해서 카카오톡 알림톡을 보냅니다."""
+    """SOLAPI Python SDK를 사용해서 카카오톡 알림톡을 보냅니다."""
     try:
-        # SOLAPI 설정 상태 확인 및 디버깅
+        # SOLAPI 설정 상태 확인
         print(f"SOLAPI configuration check:")
         print(f"  SOLAPI_API_KEY: {'SET' if SOLAPI_API_KEY else 'NOT SET'}")
         print(f"  SOLAPI_API_SECRET: {'SET' if SOLAPI_API_SECRET else 'NOT SET'}")
-        print(f"  SOLAPI_KAKAO_TEMPLATE_ID: {'SET' if SOLAPI_KAKAO_TEMPLATE_ID else 'NOT SET'}")
         print(f"  SOLAPI_TEMPLATE_ID: {'SET' if SOLAPI_TEMPLATE_ID else 'NOT SET'}")
         
-        if not all([SOLAPI_API_KEY, SOLAPI_API_SECRET]):
+        if not all([SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_TEMPLATE_ID]):
             print("SOLAPI configuration is incomplete. Skipping KakaoTalk notification.")
             return False
         
-        # SOLAPI API endpoint - v3 (try different version)
-        url = "https://api.solapi.com/messages/v3/send"
+        # SOLAPI Python SDK import
+        from solapi import SolapiMessageService
         
-        # Prepare headers - SOLAPI uses HMAC-SHA256 authentication
-        import hmac
-        import hashlib
-        import time
+        # SOLAPI 메시지 서비스 인스턴스 생성
+        message_service = SolapiMessageService(SOLAPI_API_KEY, SOLAPI_API_SECRET)
         
-        # Generate timestamp
-        timestamp = str(int(time.time()))
-        
-        # Create signature
-        signature_data = f"{SOLAPI_API_KEY}{timestamp}"
-        signature = hmac.new(
-            SOLAPI_API_SECRET.encode('utf-8'),
-            signature_data.encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest()
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'hmac-sha256 apiKey={SOLAPI_API_KEY}, timestamp={timestamp}, signature={signature}'
-        }
-        
-        # Debug: 헤더 형식 확인
-        print(f"DEBUG - Content-Type: {headers.get('Content-Type')}")
-        print(f"DEBUG - Authorization format: hmac-sha256 apiKey=..., timestamp=..., signature=...")
-        
-        # Prepare message data for KakaoTalk - SOLAPI v3 requires messages array
+        # 알림톡 메시지 데이터 준비
         message_data = {
-            "messages": [
-                {
-                    "to": phone,
-                    "from": "070-4788-9600",  # 발신번호
-                    "messageType": "CTA",  # 알림톡임을 명시적으로 지정
-                    "kakaoOptions": {
-                        "pfId": "KA01PF240722030442524jxhTR86GIYZ",  # 실제 pfId
-                        "templateId": "KA01TP250311083926928rfBysFwMCbc",  # 실제 templateId
-                        "variables": {
-                            "name": name,
-                            "tradein_date": tradein_date,
-                            "delivery_company": "우체국"
-                        }
-                    }
+            "to": phone,
+            "from": SOLAPI_FROM_NUMBER,
+            "type": "CTA",  # 카카오톡 알림톡 타입
+            "kakaoOptions": {
+                "pfId": SOLAPI_PF_ID,
+                "templateId": SOLAPI_TEMPLATE_ID,
+                "variables": {
+                    "name": name,
+                    "tradein_date": tradein_date,
+                    "delivery_company": "우체국"
                 }
-            ]
+            }
         }
         
-        print(f"Sending KakaoTalk notification to {name} ({phone}) for pickup date: {tradein_date}")
+        print(f"📱 Sending KakaoTalk notification to {name} ({phone}) for pickup date: {tradein_date}")
         
-        # Debug: 실제 값들 확인
-        print(f"DEBUG - pfId: KA01PF240722030442524jxhTR86GIYZ")
-        print(f"DEBUG - templateId: KA01TP250311083926928rfBysFwMCbc")
-        print(f"DEBUG - Authorization header: {headers.get('Authorization', 'NOT SET')[:50]}...")
+        # 알림톡 전송
+        response = message_service.send_one(message_data)
         
-        # Debug: 실제 전송되는 payload 출력
-        print(f"DEBUG - SOLAPI payload:")
-        import json
-        print(json.dumps(message_data, ensure_ascii=False, indent=2))
-        
-        # Send request
-        response = requests.post(url, headers=headers, json=message_data)
-        
-        if response.status_code == 200:
-            result = response.json()
-            print(f"KakaoTalk notification sent successfully: {result}")
+        if response.get('statusCode') == '2000':  # 성공 상태 코드
+            print(f"✅ KakaoTalk notification sent successfully: {response}")
             return True
         else:
-            print(f"Failed to send KakaoTalk notification. Status: {response.status_code}, Response: {response.text}")
+            print(f"❌ Failed to send KakaoTalk notification: {response}")
             return False
             
+    except ImportError as e:
+        print(f"❌ SOLAPI SDK import failed: {e}")
+        print("💡 Please install SOLAPI SDK: pip install solapi")
+        return False
     except Exception as e:
-        print(f"Error sending KakaoTalk notification: {e}")
+        print(f"❌ Error sending KakaoTalk notification: {e}")
         return False
 
 def monitor_columns():

@@ -34,11 +34,12 @@ GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"your
 ### 2-2. 선택적 환경변수
 
 ```bash
-# SOLAPI 카카오톡 알림톡 (사용시)
+# SOLAPI 카카오톡 알림톡 (Python SDK 사용)
 SOLAPI_API_KEY=your-solapi-api-key
 SOLAPI_API_SECRET=your-solapi-api-secret  
-SOLAPI_KAKAO_TEMPLATE_ID=your-template-id
 SOLAPI_TEMPLATE_ID=your-template-id
+SOLAPI_PF_ID=your-plusfriend-id
+SOLAPI_FROM_NUMBER=070-xxxx-xxxx
 
 # Railway 포트 (자동 설정되므로 보통 필요없음)
 PORT=5000
