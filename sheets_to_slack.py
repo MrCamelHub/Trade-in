@@ -203,42 +203,40 @@ def _send_with_sdk(name, phone, tradein_date):
     """SOLAPI Python SDK를 사용한 알림톡 전송"""
     try:
         from solapi import SolapiMessageService
+        from solapi.model import RequestMessage
+        from solapi.model.kakao.kakao_option import KakaoOption
         
         # SOLAPI 메시지 서비스 인스턴스 생성
         message_service = SolapiMessageService(SOLAPI_API_KEY, SOLAPI_API_SECRET)
         
-        # 알림톡 메시지 데이터 준비
-        message_data = {
-            "to": phone,
-            "from": SOLAPI_FROM_NUMBER,
-            "type": "CTA",  # 카카오톡 알림톡 타입
-            "kakaoOptions": {
-                "pfId": SOLAPI_PF_ID,
-                "templateId": SOLAPI_TEMPLATE_ID,
-                "variables": {
-                    "name": name,
-                    "tradein_date": tradein_date,
-                    "delivery_company": "우체국"
-                }
+        # 카카오 알림톡 발송을 위한 옵션을 생성합니다
+        kakao_option = KakaoOption(
+            pf_id=SOLAPI_PF_ID,
+            template_id=SOLAPI_TEMPLATE_ID,
+            variables={
+                "#{name}": name,
+                "#{tradein_date}": tradein_date,
+                "#{delivery_company}": "우체국"
             }
-        }
+        )
+        
+        # 단일 메시지를 생성합니다
+        message = RequestMessage(
+            from_=SOLAPI_FROM_NUMBER,  # 발신번호
+            to=phone,  # 수신번호
+            kakao_options=kakao_option,
+        )
         
         print(f"📱 [SDK] Sending KakaoTalk notification to {name} ({phone}) for pickup date: {tradein_date}")
         
-        # 알림톡 전송 (솔라피 5.x 버전 대응)
-        try:
-            # send_one 메서드 시도
-            response = message_service.send_one(message_data)
-        except AttributeError:
-            # send 메서드로 대체 (솔라피 5.x)
-            response = message_service.send(message_data)
+        # 메시지를 발송합니다
+        response = message_service.send(message)
         
-        if response.get('statusCode') == '2000':  # 성공 상태 코드
-            print(f"✅ [SDK] KakaoTalk notification sent successfully: {response}")
-            return True
-        else:
-            print(f"❌ [SDK] Failed to send KakaoTalk notification: {response}")
-            return False
+        print(f"✅ [SDK] KakaoTalk notification sent successfully!")
+        print(f"Group ID: {response.group_info.group_id}")
+        print(f"요청한 메시지 개수: {response.group_info.count.total}")
+        print(f"성공한 메시지 개수: {response.group_info.count.registered}")
+        return True
             
     except Exception as e:
         print(f"❌ [SDK] Error: {e}")
