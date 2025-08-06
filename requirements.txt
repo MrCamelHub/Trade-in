@@ -6,4 +6,4 @@ google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
 python-dotenv==1.0.0
 requests==2.31.0
-solapi==4.2.0
+solapi==5.0.2

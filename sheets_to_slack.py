@@ -161,19 +161,33 @@ def clean_date_string(date_str):
         return cleaned  # 오류시 정리된 원본 반환
 
 def send_kakao_notification(name, phone, tradein_date):
-    """SOLAPI Python SDK를 사용해서 카카오톡 알림톡을 보냅니다."""
+    """SOLAPI를 사용해서 카카오톡 알림톡을 보냅니다 (SDK 우선, 실패시 HTTP 요청)."""
     try:
         # SOLAPI 설정 상태 확인
-        print(f"SOLAPI configuration check:")
-        print(f"  SOLAPI_API_KEY: {'SET' if SOLAPI_API_KEY else 'NOT SET'}")
-        print(f"  SOLAPI_API_SECRET: {'SET' if SOLAPI_API_SECRET else 'NOT SET'}")
-        print(f"  SOLAPI_TEMPLATE_ID: {'SET' if SOLAPI_TEMPLATE_ID else 'NOT SET'}")
+        print(f"📋 SOLAPI configuration check:")
+        print(f"  ✅ SOLAPI_API_KEY: {'SET' if SOLAPI_API_KEY else 'NOT SET'}")
+        print(f"  ✅ SOLAPI_API_SECRET: {'SET' if SOLAPI_API_SECRET else 'NOT SET'}")
+        print(f"  ✅ SOLAPI_TEMPLATE_ID: {'SET' if SOLAPI_TEMPLATE_ID else 'NOT SET'}")
         
         if not all([SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_TEMPLATE_ID]):
-            print("SOLAPI configuration is incomplete. Skipping KakaoTalk notification.")
+            print("❌ SOLAPI configuration is incomplete. Skipping KakaoTalk notification.")
             return False
         
-        # SOLAPI Python SDK import
+        # 먼저 SOLAPI Python SDK 사용 시도
+        try:
+            from solapi import SolapiMessageService
+            return _send_with_sdk(name, phone, tradein_date)
+        except ImportError:
+            print("⚠️ SOLAPI SDK not available, falling back to HTTP requests")
+            return _send_with_http(name, phone, tradein_date)
+            
+    except Exception as e:
+        print(f"❌ Error sending KakaoTalk notification: {e}")
+        return False
+
+def _send_with_sdk(name, phone, tradein_date):
+    """SOLAPI Python SDK를 사용한 알림톡 전송"""
+    try:
         from solapi import SolapiMessageService
         
         # SOLAPI 메시지 서비스 인스턴스 생성
@@ -195,24 +209,83 @@ def send_kakao_notification(name, phone, tradein_date):
             }
         }
         
-        print(f"📱 Sending KakaoTalk notification to {name} ({phone}) for pickup date: {tradein_date}")
+        print(f"📱 [SDK] Sending KakaoTalk notification to {name} ({phone}) for pickup date: {tradein_date}")
         
         # 알림톡 전송
         response = message_service.send_one(message_data)
         
         if response.get('statusCode') == '2000':  # 성공 상태 코드
-            print(f"✅ KakaoTalk notification sent successfully: {response}")
+            print(f"✅ [SDK] KakaoTalk notification sent successfully: {response}")
             return True
         else:
-            print(f"❌ Failed to send KakaoTalk notification: {response}")
+            print(f"❌ [SDK] Failed to send KakaoTalk notification: {response}")
             return False
             
-    except ImportError as e:
-        print(f"❌ SOLAPI SDK import failed: {e}")
-        print("💡 Please install SOLAPI SDK: pip install solapi")
-        return False
     except Exception as e:
-        print(f"❌ Error sending KakaoTalk notification: {e}")
+        print(f"❌ [SDK] Error: {e}")
+        return False
+
+def _send_with_http(name, phone, tradein_date):
+    """HTTP 요청을 사용한 알림톡 전송 (후방 호환성)"""
+    try:
+        import hmac
+        import hashlib
+        import time
+        
+        # SOLAPI API endpoint - v4
+        url = "https://api.solapi.com/messages/v4/send"
+        
+        # 타임스탬프 생성
+        timestamp = str(int(time.time()))
+        
+        # 서명 생성 (HMAC-SHA256)
+        signature_data = f"{SOLAPI_API_KEY}{timestamp}"
+        signature = hmac.new(
+            SOLAPI_API_SECRET.encode('utf-8'),
+            signature_data.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'hmac-sha256 apiKey={SOLAPI_API_KEY}, timestamp={timestamp}, signature={signature}'
+        }
+        
+        # 메시지 데이터 준비 (v4 API 형식)
+        message_data = {
+            "messages": [
+                {
+                    "to": phone,
+                    "from": SOLAPI_FROM_NUMBER,
+                    "type": "CTA",  # 카카오톡 알림톡 타입
+                    "kakaoOptions": {
+                        "pfId": SOLAPI_PF_ID,
+                        "templateId": SOLAPI_TEMPLATE_ID,
+                        "variables": {
+                            "name": name,
+                            "tradein_date": tradein_date,
+                            "delivery_company": "우체국"
+                        }
+                    }
+                }
+            ]
+        }
+        
+        print(f"📱 [HTTP] Sending KakaoTalk notification to {name} ({phone}) for pickup date: {tradein_date}")
+        
+        # HTTP 요청 전송
+        response = requests.post(url, headers=headers, json=message_data)
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ [HTTP] KakaoTalk notification sent successfully: {result}")
+            return True
+        else:
+            print(f"❌ [HTTP] Failed to send KakaoTalk notification. Status: {response.status_code}, Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ [HTTP] Error: {e}")
         return False
 
 def monitor_columns():
