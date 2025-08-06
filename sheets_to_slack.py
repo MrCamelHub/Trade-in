@@ -72,15 +72,33 @@ def get_spreadsheet_revision(service):
         print(f"Error getting spreadsheet revision: {e}")
         return None
 
-def get_row_data(service, row_number):
-    """특정 행의 데이터를 가져옵니다."""
+def get_row_data(service, row_number, max_retries=3):
+    """특정 행의 데이터를 가져옵니다. (재시도 로직 포함)"""
     range_name = f'{SHEET_NAME}!A{row_number}:I{row_number}'
-    result = service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID,
-        range=range_name
-    ).execute()
-    values = result.get('values', [])
-    return values[0] if values else []
+    
+    for attempt in range(max_retries):
+        try:
+            result = service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range=range_name
+            ).execute()
+            values = result.get('values', [])
+            return values[0] if values else []
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2  # 2초, 4초, 6초 대기
+                    print(f"API rate limit exceeded, waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Failed to get row data after {max_retries} attempts: {e}")
+                    return []
+            else:
+                print(f"Error getting row data: {e}")
+                return []
+    
+    return []
 
 def send_slack_message(message):
     """슬랙으로 메시지를 보냅니다."""
@@ -155,10 +173,16 @@ def clean_date_string(date_str):
             date_obj = datetime.strptime(cleaned, '%Y/%m/%d')
             return date_obj.strftime('%Y-%m-%d')
         
-        # YYYY.MM.DD 형식 시도
-        elif len(cleaned) == 10 and cleaned.count('.') == 2:
-            date_obj = datetime.strptime(cleaned, '%Y.%m.%d')
-            return date_obj.strftime('%Y-%m-%d')
+        # YYYY.MM.DD 형식 시도 (점 뒤 공백 제거)
+        elif '.' in cleaned:
+            # 점 뒤 공백 제거 후 시도
+            cleaned_dot = cleaned.replace('. ', '.').replace(' .', '.')
+            if cleaned_dot.count('.') == 2:
+                try:
+                    date_obj = datetime.strptime(cleaned_dot, '%Y.%m.%d')
+                    return date_obj.strftime('%Y-%m-%d')
+                except ValueError:
+                    pass
         
         # 기타 형식들도 시도
         for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d', '%Y년%m월%d일']:
@@ -491,56 +515,78 @@ def monitor_columns():
     
     # 현재 M열과 L열의 모든 데이터를 이미 처리된 것으로 마킹
     print("Marking existing M column data as already processed...")
-    m_column_data = get_m_column_data(service)
-    for row_num, row in enumerate(m_column_data, 1):
-        if row and row[0].strip():  # M열에 데이터가 있음
-            row_key = f"{row_num}_{row[0].strip()}"
-            processed_m_rows.add(row_key)
-            
-            # 카카오톡 발송 이력도 마킹 (날짜+휴대폰 기준)
-            row_data = get_row_data(service, row_num)
-            if row_data and len(row_data) >= 9:
-                phone = row_data[2] if len(row_data) > 2 else ""  # C열: 연락처
-                tradein_date_raw = row_data[8] if len(row_data) > 8 else ""  # I열: 수거신청일
-                tradein_date = clean_date_string(tradein_date_raw)
-                if phone and tradein_date:
-                    kakao_key = f"{phone}_{tradein_date}_M"
-                    kakao_m_sent.add(kakao_key)
+    try:
+        m_column_data = get_m_column_data(service)
+        for row_num, row in enumerate(m_column_data, 1):
+            if row and row[0].strip():  # M열에 데이터가 있음
+                row_key = f"{row_num}_{row[0].strip()}"
+                processed_m_rows.add(row_key)
+                
+                # API 할당량 절약을 위해 카카오톡 발송 이력은 나중에 처리
+                # row_data = get_row_data(service, row_num)
+                # if row_data and len(row_data) >= 9:
+                #     phone = row_data[2] if len(row_data) > 2 else ""  # C열: 연락처
+                #     tradein_date_raw = row_data[8] if len(row_data) > 8 else ""  # I열: 수거신청일
+                #     tradein_date = clean_date_string(tradein_date_raw)
+                #     if phone and tradein_date:
+                #         kakao_key = f"{phone}_{tradein_date}_M"
+                #         kakao_m_sent.add(kakao_key)
+    except Exception as e:
+        print(f"Error processing M column data: {e}")
     
     print("Marking existing L column data as already processed...")
-    l_column_data = get_l_column_data(service)
-    for row_num, row in enumerate(l_column_data, 1):
-        if row and row[0].strip():  # L열에 데이터가 있음
-            row_key = f"{row_num}_{row[0].strip()}"
-            processed_l_rows.add(row_key)
-            
-            # 카카오톡 발송 이력도 마킹 (날짜+휴대폰 기준)
-            row_data = get_row_data(service, row_num)
-            if row_data and len(row_data) >= 9:
-                phone = row_data[2] if len(row_data) > 2 else ""  # C열: 연락처
-                tradein_date_raw = row_data[8] if len(row_data) > 8 else ""  # I열: 수거신청일
-                tradein_date = clean_date_string(tradein_date_raw)
-                if phone and tradein_date:
-                    kakao_key = f"{phone}_{tradein_date}_L"
-                    kakao_l_sent.add(kakao_key)
+    try:
+        l_column_data = get_l_column_data(service)
+        for row_num, row in enumerate(l_column_data, 1):
+            if row and row[0].strip():  # L열에 데이터가 있음
+                row_key = f"{row_num}_{row[0].strip()}"
+                processed_l_rows.add(row_key)
+                
+                # API 할당량 절약을 위해 카카오톡 발송 이력은 나중에 처리
+                # row_data = get_row_data(service, row_num)
+                # if row_data and len(row_data) >= 9:
+                #     phone = row_data[2] if len(row_data) > 2 else ""  # C열: 연락처
+                #     tradein_date_raw = row_data[8] if len(row_data) > 8 else ""  # I열: 수거신청일
+                #     tradein_date = clean_date_string(tradein_date_raw)
+                #     if phone and tradein_date:
+                #         kakao_key = f"{phone}_{tradein_date}_L"
+                #         kakao_l_sent.add(kakao_key)
+    except Exception as e:
+        print(f"Error processing L column data: {e}")
     
-    # 처리된 데이터를 파일에 저장
-    with open(processed_m_file, 'w') as f:
-        for row_key in processed_m_rows:
-            f.write(f"{row_key}\n")
+    # 처리된 데이터를 파일에 저장 (오류 방지)
+    try:
+        with open(processed_m_file, 'w') as f:
+            for row_key in processed_m_rows:
+                f.write(f"{row_key}\n")
+        print(f"✅ M column processed data saved: {len(processed_m_rows)} rows")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not save M column processed data: {e}")
     
-    with open(processed_l_file, 'w') as f:
-        for row_key in processed_l_rows:
-            f.write(f"{row_key}\n")
+    try:
+        with open(processed_l_file, 'w') as f:
+            for row_key in processed_l_rows:
+                f.write(f"{row_key}\n")
+        print(f"✅ L column processed data saved: {len(processed_l_rows)} rows")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not save L column processed data: {e}")
     
-    # 카카오톡 발송 이력을 파일에 저장
-    with open(kakao_m_sent_file, 'w') as f:
-        for kakao_key in kakao_m_sent:
-            f.write(f"{kakao_key}\n")
+    # 카카오톡 발송 이력을 파일에 저장 (오류 방지)
+    try:
+        with open(kakao_m_sent_file, 'w') as f:
+            for kakao_key in kakao_m_sent:
+                f.write(f"{kakao_key}\n")
+        print(f"✅ KakaoTalk M sent history saved: {len(kakao_m_sent)} records")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not save KakaoTalk M sent history: {e}")
     
-    with open(kakao_l_sent_file, 'w') as f:
-        for kakao_key in kakao_l_sent:
-            f.write(f"{kakao_key}\n")
+    try:
+        with open(kakao_l_sent_file, 'w') as f:
+            for kakao_key in kakao_l_sent:
+                f.write(f"{kakao_key}\n")
+        print(f"✅ KakaoTalk L sent history saved: {len(kakao_l_sent)} records")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not save KakaoTalk L sent history: {e}")
     
     print(f"Starting column monitoring (DIRECT CHECK MODE)... (Processed M rows: {len(processed_m_rows)}, Processed L rows: {len(processed_l_rows)})")
     
@@ -548,7 +594,12 @@ def monitor_columns():
         try:
             # 직접 M열과 L열 데이터 확인
             print("Checking M and L columns directly...")
+            
+            # API 요청 간 지연 추가
+            time.sleep(1)
             m_column_data = get_m_column_data(service)
+            
+            time.sleep(1)
             l_column_data = get_l_column_data(service)
             
             # 새로운 데이터가 있는지 확인
