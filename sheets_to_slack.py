@@ -465,6 +465,12 @@ def monitor_columns():
     processed_m_rows = set()
     processed_l_rows = set()
     
+    # 카카오톡 알림톡 발송 이력을 저장할 파일들 (중복 발송 방지용)
+    kakao_m_sent_file = 'kakao_m_sent.txt'
+    kakao_l_sent_file = 'kakao_l_sent.txt'
+    kakao_m_sent = set()
+    kakao_l_sent = set()
+    
     # 기존 처리 데이터 초기화 (테스트용)
     if os.path.exists(processed_m_file):
         print("Removing existing processed M data file for fresh start...")
@@ -474,6 +480,15 @@ def monitor_columns():
         print("Removing existing processed L data file for fresh start...")
         os.remove(processed_l_file)
     
+    # 카카오톡 발송 이력 파일 초기화 (테스트용)
+    if os.path.exists(kakao_m_sent_file):
+        print("Removing existing KakaoTalk M sent history for fresh start...")
+        os.remove(kakao_m_sent_file)
+    
+    if os.path.exists(kakao_l_sent_file):
+        print("Removing existing KakaoTalk L sent history for fresh start...")
+        os.remove(kakao_l_sent_file)
+    
     # 현재 M열과 L열의 모든 데이터를 이미 처리된 것으로 마킹
     print("Marking existing M column data as already processed...")
     m_column_data = get_m_column_data(service)
@@ -481,6 +496,16 @@ def monitor_columns():
         if row and row[0].strip():  # M열에 데이터가 있음
             row_key = f"{row_num}_{row[0].strip()}"
             processed_m_rows.add(row_key)
+            
+            # 카카오톡 발송 이력도 마킹 (날짜+휴대폰 기준)
+            row_data = get_row_data(service, row_num)
+            if row_data and len(row_data) >= 9:
+                phone = row_data[2] if len(row_data) > 2 else ""  # C열: 연락처
+                tradein_date_raw = row_data[8] if len(row_data) > 8 else ""  # I열: 수거신청일
+                tradein_date = clean_date_string(tradein_date_raw)
+                if phone and tradein_date:
+                    kakao_key = f"{phone}_{tradein_date}_M"
+                    kakao_m_sent.add(kakao_key)
     
     print("Marking existing L column data as already processed...")
     l_column_data = get_l_column_data(service)
@@ -488,6 +513,16 @@ def monitor_columns():
         if row and row[0].strip():  # L열에 데이터가 있음
             row_key = f"{row_num}_{row[0].strip()}"
             processed_l_rows.add(row_key)
+            
+            # 카카오톡 발송 이력도 마킹 (날짜+휴대폰 기준)
+            row_data = get_row_data(service, row_num)
+            if row_data and len(row_data) >= 9:
+                phone = row_data[2] if len(row_data) > 2 else ""  # C열: 연락처
+                tradein_date_raw = row_data[8] if len(row_data) > 8 else ""  # I열: 수거신청일
+                tradein_date = clean_date_string(tradein_date_raw)
+                if phone and tradein_date:
+                    kakao_key = f"{phone}_{tradein_date}_L"
+                    kakao_l_sent.add(kakao_key)
     
     # 처리된 데이터를 파일에 저장
     with open(processed_m_file, 'w') as f:
@@ -497,6 +532,15 @@ def monitor_columns():
     with open(processed_l_file, 'w') as f:
         for row_key in processed_l_rows:
             f.write(f"{row_key}\n")
+    
+    # 카카오톡 발송 이력을 파일에 저장
+    with open(kakao_m_sent_file, 'w') as f:
+        for kakao_key in kakao_m_sent:
+            f.write(f"{kakao_key}\n")
+    
+    with open(kakao_l_sent_file, 'w') as f:
+        for kakao_key in kakao_l_sent:
+            f.write(f"{kakao_key}\n")
     
     print(f"Starting column monitoring (DIRECT CHECK MODE)... (Processed M rows: {len(processed_m_rows)}, Processed L rows: {len(processed_l_rows)})")
     
@@ -537,8 +581,20 @@ def monitor_columns():
                                 tradein_date = clean_date_string(tradein_date_raw)
                                 
                                 if name and phone and tradein_date:
-                                    kakao_sent = send_kakao_notification(name, phone, tradein_date)
-                                    print(f"KakaoTalk notification {'sent' if kakao_sent else 'failed'} for {name}")
+                                    # 중복 발송 방지: 날짜+휴대폰 기준으로 체크
+                                    kakao_key = f"{phone}_{tradein_date}_M"
+                                    if kakao_key not in kakao_m_sent:
+                                        kakao_sent = send_kakao_notification(name, phone, tradein_date)
+                                        if kakao_sent:
+                                            kakao_m_sent.add(kakao_key)
+                                            # 발송 이력을 파일에 저장
+                                            with open(kakao_m_sent_file, 'a') as f:
+                                                f.write(f"{kakao_key}\n")
+                                            print(f"KakaoTalk notification sent for {name} ({phone}_{tradein_date})")
+                                        else:
+                                            print(f"KakaoTalk notification failed for {name}")
+                                    else:
+                                        print(f"KakaoTalk notification already sent for {name} ({phone}_{tradein_date}) - skipping")
                                 else:
                                     print(f"Incomplete data for KakaoTalk notification: name={name}, phone={phone}, tradein_date={tradein_date}")
                             
@@ -574,15 +630,31 @@ def monitor_columns():
                             slack_sent = send_slack_message(message)
                             
                             # 카카오톡 알림톡 전송 (L열에 도착 표시가 입력된 경우)
-                            if len(row_data) >= 3:  # 이름, 연락처가 있는지 확인
+                            if len(row_data) >= 9:  # 이름, 연락처, 수거신청일이 있는지 확인
                                 name = row_data[1] if len(row_data) > 1 else ""  # B열: 이름
                                 phone = row_data[2] if len(row_data) > 2 else ""  # C열: 연락처
+                                tradein_date_raw = row_data[8] if len(row_data) > 8 else ""  # I열: 수거신청일
                                 
-                                if name and phone:
-                                    kakao_sent = send_kakao_notification_l_column(name, phone)
-                                    print(f"KakaoTalk arrival notification {'sent' if kakao_sent else 'failed'} for {name}")
+                                # 날짜 데이터 정리 및 ISO 8601 형식으로 변환
+                                tradein_date = clean_date_string(tradein_date_raw)
+                                
+                                if name and phone and tradein_date:
+                                    # 중복 발송 방지: 날짜+휴대폰 기준으로 체크
+                                    kakao_key = f"{phone}_{tradein_date}_L"
+                                    if kakao_key not in kakao_l_sent:
+                                        kakao_sent = send_kakao_notification_l_column(name, phone)
+                                        if kakao_sent:
+                                            kakao_l_sent.add(kakao_key)
+                                            # 발송 이력을 파일에 저장
+                                            with open(kakao_l_sent_file, 'a') as f:
+                                                f.write(f"{kakao_key}\n")
+                                            print(f"KakaoTalk arrival notification sent for {name} ({phone}_{tradein_date})")
+                                        else:
+                                            print(f"KakaoTalk arrival notification failed for {name}")
+                                    else:
+                                        print(f"KakaoTalk arrival notification already sent for {name} ({phone}_{tradein_date}) - skipping")
                                 else:
-                                    print(f"Incomplete data for KakaoTalk arrival notification: name={name}, phone={phone}")
+                                    print(f"Incomplete data for KakaoTalk arrival notification: name={name}, phone={phone}, tradein_date={tradein_date}")
                             
                             if slack_sent:
                                 # 처리 완료 표시
