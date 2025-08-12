@@ -22,6 +22,9 @@ SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN')
 SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#08_biz_bonibello_request')  # 기본 채널
 slack_client = WebClient(token=SLACK_BOT_TOKEN)
 
+# Polling interval configuration (default: 10 minutes)
+POLL_INTERVAL_SECONDS = int(os.getenv('POLL_INTERVAL_SECONDS', '600'))
+
 # SOLAPI configuration for KakaoTalk
 SOLAPI_API_KEY = os.getenv('SOLAPI_API_KEY')
 SOLAPI_API_SECRET = os.getenv('SOLAPI_API_SECRET')
@@ -721,17 +724,17 @@ def monitor_columns():
                         else:
                             print(f"Failed to get row data for L row {row_num}")
             
-            # 새로운 데이터가 있으면 1분 대기, 없으면 1분 대기 (테스트용)
+            # 새로운 데이터가 있든 없든 설정된 간격으로 대기
+            wait_minutes = POLL_INTERVAL_SECONDS // 60
             if new_data_found:
-                print("New data processed, waiting 1 minute...")
-                time.sleep(60)  # 1분
+                print(f"New data processed, waiting {wait_minutes} minute(s)...")
             else:
-                print("No new column data, waiting 1 minute...")
-                time.sleep(60)  # 1분
+                print(f"No new column data, waiting {wait_minutes} minute(s)...")
+            time.sleep(POLL_INTERVAL_SECONDS)
             
         except Exception as e:
             print(f"Error in monitoring: {e}")
-            time.sleep(60)  # 오류 발생 시 1분 대기 (테스트용)
+            time.sleep(POLL_INTERVAL_SECONDS)  # 오류 발생 시 설정된 간격 대기
 
 def monitor_m_column():
     """M열을 모니터링하여 새로운 데이터가 있으면 슬랙으로 메시지를 보냅니다."""
@@ -814,17 +817,17 @@ def monitor_m_column():
                         else:
                             print(f"Failed to get row data for row {row_num}")
             
-            # 새로운 데이터가 있으면 1분 대기, 없으면 1분 대기 (테스트용)
+            # 새로운 데이터가 있든 없든 설정된 간격으로 대기
+            wait_minutes = POLL_INTERVAL_SECONDS // 60
             if new_data_found:
-                print("New data processed, waiting 1 minute...")
-                time.sleep(60)  # 1분
+                print(f"New data processed, waiting {wait_minutes} minute(s)...")
             else:
-                print("No new M column data, waiting 1 minute...")
-                time.sleep(60)  # 1분
+                print(f"No new M column data, waiting {wait_minutes} minute(s)...")
+            time.sleep(POLL_INTERVAL_SECONDS)
             
         except Exception as e:
             print(f"Error in monitoring: {e}")
-            time.sleep(60)  # 오류 발생 시 1분 대기 (테스트용)
+            time.sleep(POLL_INTERVAL_SECONDS)  # 오류 발생 시 설정된 간격 대기
 
 def test_slack_connection():
     """슬랙 연결을 테스트합니다."""
