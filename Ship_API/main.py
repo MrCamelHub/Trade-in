@@ -79,30 +79,32 @@ async def process_orders() -> Dict[str, Any]:
         
         async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
             # 개별 주문 처리
-            for i, order_data in enumerate(transformed_orders):
-                order_no = order_data.get("orderNo", f"ORDER_{i+1}")
+            for i, shopby_order in enumerate(shopby_orders):
+                order_no = shopby_order.get("orderNo", f"ORDER_{i+1}")
                 
                 try:
-                    print(f"주문 처리 중: {order_no} ({i+1}/{len(transformed_orders)})")
+                    print(f"주문 처리 중: {order_no} ({i+1}/{len(shopby_orders)})")
                     
-                    # 데이터 유효성 검사
-                    validation_errors = transformer.validate_transformed_data(order_data)
-                    if validation_errors:
-                        error_msg = f"주문 {order_no} 유효성 검사 실패: {validation_errors}"
+                    # 샵바이 주문 데이터를 코너로지스 출고 데이터로 변환
+                    outbound_data_list = cornerlogis_client.prepare_outbound_data(shopby_order, sku_mapping)
+                    
+                    if not outbound_data_list:
+                        error_msg = f"주문 {order_no}: 변환할 상품이 없습니다"
                         print(error_msg)
                         result["errors"].append(error_msg)
                         result["cornerlogis_failure_count"] += 1
                         continue
                     
-                    # 코너로지스 API 호출
-                    cornerlogis_result = await cornerlogis_client.create_outbound_order(order_data)
+                    # 코너로지스 API 호출 (배열로 전송)
+                    cornerlogis_result = await cornerlogis_client.create_outbound_order(outbound_data_list)
                     
                     if cornerlogis_result:
-                        print(f"주문 {order_no} 처리 성공")
+                        print(f"주문 {order_no} 처리 성공 ({len(outbound_data_list)}개 상품)")
                         result["cornerlogis_success_count"] += 1
                         result["processed_orders"].append({
                             "orderNo": order_no,
                             "status": "success",
+                            "items_count": len(outbound_data_list),
                             "cornerlogis_result": cornerlogis_result
                         })
                     else:
@@ -117,7 +119,7 @@ async def process_orders() -> Dict[str, Any]:
                         })
                     
                     # API 호출 간격 조절
-                    if i < len(transformed_orders) - 1:
+                    if i < len(shopby_orders) - 1:
                         await asyncio.sleep(1)
                         
                 except Exception as e:

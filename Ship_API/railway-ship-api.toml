@@ -1,0 +1,35 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+# Ship API 전용 서비스 설정
+[services.ship-api]
+name = "ship-api"
+source = "."
+buildCommand = "pip install -r requirements.txt"
+startCommand = "python app.py"
+
+[services.ship-api.variables]
+TZ = "Asia/Seoul"
+PYTHONPATH = "."
+PORT = "8000"
+
+# Ship API 스케줄러 (별도 서비스)
+[services.ship-scheduler]
+name = "ship-scheduler"
+source = "."
+buildCommand = "pip install -r requirements.txt"
+
+[services.ship-scheduler.schedule]
+# 매일 평일 13:00 (Asia/Seoul) 실행 = UTC 04:00
+cron = "0 4 * * 1-5"
+command = "python -m Ship_API.main schedule"
+
+[services.ship-scheduler.variables]
+TZ = "Asia/Seoul"
+PYTHONPATH = "."

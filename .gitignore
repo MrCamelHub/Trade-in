@@ -30,6 +30,11 @@ MANIFEST
 venv/
 env/
 ENV/
+.venv*/
+
+# Google 인증 파일
+*credentials*.json
+youtube-crawling-*.json
 
 # IDE
 .vscode/

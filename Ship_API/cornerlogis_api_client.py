@@ -26,27 +26,25 @@ class CornerlogisApiClient:
     def _get_headers(self) -> Dict[str, str]:
         """API 요청 헤더 생성"""
         headers = {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json;charset=UTF-8",
             "Accept": "application/json"
         }
         
-        # API 키가 있다면 추가
+        # API 키가 있다면 Authorization 헤더에 추가
         if self.config.api_key:
-            headers["Authorization"] = f"Bearer {self.config.api_key}"
-            # 또는 다른 형태의 인증 헤더
-            # headers["X-API-Key"] = self.config.api_key
+            headers["Authorization"] = self.config.api_key
         
         return headers
     
     async def create_outbound_order(
         self,
-        order_data: Dict[str, Any]
+        order_data: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
         """
         코너로지스 출고 주문 생성
         
         Args:
-            order_data: 출고 주문 데이터
+            order_data: 출고 주문 데이터 리스트 (API 스펙에 따라 배열로 전송)
         
         Returns:
             생성된 출고 주문 정보
@@ -54,7 +52,7 @@ class CornerlogisApiClient:
         if not self.session:
             raise RuntimeError("ClientSession not initialized. Use async context manager.")
         
-        url = f"{self.config.base_url}/api/outbound"
+        url = f"{self.config.base_url}/api/v1/outbound/saveOutbound"
         headers = self._get_headers()
         
         try:
@@ -146,7 +144,7 @@ class CornerlogisApiClient:
         self,
         shopby_order: Dict[str, Any],
         sku_mapping: Dict[str, str] = None
-    ) -> Dict[str, Any]:
+    ) -> List[Dict[str, Any]]:
         """
         샵바이 주문 데이터를 코너로지스 출고 데이터로 변환
         
@@ -155,44 +153,76 @@ class CornerlogisApiClient:
             sku_mapping: SKU 매핑 딕셔너리
         
         Returns:
-            코너로지스 API 형식의 출고 데이터
+            코너로지스 API 형식의 출고 데이터 리스트
         """
-        # 기본 매핑 (실제 API 스펙에 맞게 조정 필요)
-        outbound_data = {
-            "orderNo": shopby_order.get("orderNo", ""),
-            "customerName": shopby_order.get("customerName", ""),
-            "customerPhone": shopby_order.get("customerPhone", ""),
-            "customerEmail": shopby_order.get("customerEmail", ""),
-            "deliveryAddress": {
-                "zipCode": shopby_order.get("deliveryZipCode", ""),
-                "address1": shopby_order.get("deliveryAddress1", ""),
-                "address2": shopby_order.get("deliveryAddress2", ""),
-                "recipient": shopby_order.get("recipientName", ""),
-                "recipientPhone": shopby_order.get("recipientPhone", "")
-            },
-            "items": []
-        }
-        
-        # 주문 상품 처리
+        # 주문 상품 처리 - 각 상품별로 별도 출고 요청 생성
         items = shopby_order.get("items", []) or shopby_order.get("orderItems", [])
+        outbound_data_list = []
+        
         for item in items:
             original_sku = item.get("productCode", "") or item.get("sku", "")
             
-            # SKU 매핑 적용
-            mapped_sku = original_sku
+            # SKU 매핑 적용하여 goodsId 찾기
+            goods_id = None
             if sku_mapping and original_sku in sku_mapping:
-                mapped_sku = sku_mapping[original_sku]
+                # 매핑된 값이 숫자라면 goodsId로 사용
+                try:
+                    goods_id = int(sku_mapping[original_sku])
+                except (ValueError, TypeError):
+                    # 매핑된 값이 숫자가 아니라면 기본값 사용
+                    goods_id = 799109  # 기본 goodsId
+            else:
+                goods_id = 799109  # 기본 goodsId
             
-            item_data = {
-                "productCode": mapped_sku,
-                "productName": item.get("productName", ""),
-                "quantity": item.get("quantity", 1),
-                "unitPrice": item.get("unitPrice", 0),
-                "totalPrice": item.get("totalPrice", 0)
+            # 코너로지스 API 스펙에 맞는 데이터 구조
+            outbound_item = {
+                "companyOrderId": shopby_order.get("orderNo", ""),
+                "companyMemo": f"샵바이 주문 - {item.get('productName', '')}",
+                "orderAt": self._format_order_date(shopby_order.get("orderDate")),
+                "receiverName": shopby_order.get("recipientName", "") or shopby_order.get("customerName", ""),
+                "receiverPhone": shopby_order.get("recipientPhone", "") or shopby_order.get("customerPhone", ""),
+                "receiverAddress": self._format_address(shopby_order),
+                "receiverZipcode": shopby_order.get("deliveryZipCode", "") or shopby_order.get("zipCode", ""),
+                "receiverMemo": shopby_order.get("deliveryMemo", "") or shopby_order.get("memo", ""),
+                "price": int(item.get("totalPrice", 0) or item.get("unitPrice", 0) or 0),
+                "goodsId": goods_id
             }
-            outbound_data["items"].append(item_data)
+            
+            outbound_data_list.append(outbound_item)
         
-        return outbound_data
+        return outbound_data_list
+    
+    def _format_order_date(self, order_date) -> str:
+        """주문일시를 코너로지스 형식으로 변환"""
+        if not order_date:
+            from datetime import datetime
+            return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 다양한 날짜 형식 처리
+        try:
+            if isinstance(order_date, str):
+                import pandas as pd
+                dt = pd.to_datetime(order_date)
+                return dt.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                return str(order_date)
+        except:
+            from datetime import datetime
+            return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    def _format_address(self, shopby_order: Dict[str, Any]) -> str:
+        """주소를 한 줄로 합쳐서 반환"""
+        address1 = shopby_order.get("deliveryAddress1", "") or shopby_order.get("address1", "")
+        address2 = shopby_order.get("deliveryAddress2", "") or shopby_order.get("address2", "")
+        
+        if address1 and address2:
+            return f"{address1} {address2}".strip()
+        elif address1:
+            return address1
+        elif address2:
+            return address2
+        else:
+            return ""
 
 
 # 사용 예시 및 테스트 함수
@@ -202,24 +232,26 @@ async def test_cornerlogis_api():
     
     config = load_app_config()
     
-    # 테스트 데이터
+    # 테스트 데이터 (코너로지스 API 스펙 예시와 동일)
     test_order = {
-        "orderNo": "TEST001",
-        "customerName": "테스트고객",
+        "orderNo": "202501028568638",
+        "orderDate": "2025-01-05 00:00:00",
+        "customerName": "홍길동",
         "customerPhone": "010-1234-5678",
-        "customerEmail": "test@example.com",
-        "deliveryZipCode": "12345",
-        "deliveryAddress1": "서울시 강남구",
-        "deliveryAddress2": "테스트동 123번지",
-        "recipientName": "테스트수령인",
-        "recipientPhone": "010-9876-5432",
+        "recipientName": "홍길동",
+        "recipientPhone": "010-1234-5678",
+        "deliveryZipCode": "11192",
+        "deliveryAddress1": "경기도 포천시 내촌면 금강로 2223번길 24",
+        "deliveryAddress2": "",
+        "deliveryMemo": "경비실에 맡겨주세요.",
+        "memo": "네이버 쇼핑 유입",
         "items": [
             {
                 "productCode": "SKU001",
                 "productName": "테스트상품",
-                "quantity": 2,
-                "unitPrice": 10000,
-                "totalPrice": 20000
+                "quantity": 1,
+                "unitPrice": 25000,
+                "totalPrice": 25000
             }
         ]
     }

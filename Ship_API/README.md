@@ -104,12 +104,51 @@ Ship_API/
 
 ## Railway 배포
 
-1. Railway 프로젝트 생성
-2. 환경변수 설정 (Railway 대시보드에서)
-3. cron 설정:
-   ```bash
-   0 13 * * 1-5 python -m Ship_API.main schedule
+### Option 1: 새로운 Railway 프로젝트 생성 (권장)
+
+1. **새 Railway 프로젝트 생성**:
+   - Railway 대시보드에서 "New Project" 클릭
+   - GitHub 저장소 연결
+   - `feature/ship-api-implementation` 브랜치 선택
+
+2. **환경변수 설정**:
    ```
+   CORNERLOGIS_API_KEY=your_api_key_here
+   SHOPBY_AUTH_TOKEN=your_shopby_token
+   GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account",...}
+   RAILWAY_ENVIRONMENT=production
+   ```
+
+3. **배포 확인**:
+   - URL: `https://your-new-app.railway.app`
+   - 헬스체크: `https://your-new-app.railway.app/health`
+   - 테스트: `https://your-new-app.railway.app/test`
+
+### Option 2: 기존 프로젝트에 새 서비스 추가
+
+1. **기존 Railway 프로젝트에서**:
+   - Settings → Services → Add Service
+   - GitHub 저장소의 `feature/ship-api-implementation` 브랜치 선택
+   - 서비스명: `ship-api`
+
+2. **별도 환경변수 설정** (기존 서비스와 분리)
+
+3. **Cron 스케줄링**:
+   ```bash
+   # UTC 04:00 = KST 13:00 (평일만)
+   0 4 * * 1-5 curl -X POST https://your-ship-api.railway.app/schedule
+   ```
+
+### 추천 배포 구조
+
+```
+기존 Railway 프로젝트
+├── web-production-928a (기존 서비스)
+│   └── 판매신청 및 도착 관련
+└── ship-api (새 서비스)
+    ├── 웹 인터페이스: app.py
+    └── 스케줄러: cron job
+```
 
 ## 트러블슈팅
 
