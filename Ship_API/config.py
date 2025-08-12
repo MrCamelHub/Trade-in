@@ -19,10 +19,8 @@ class ShopbyApiConfig:
 class CornerlogisApiConfig:
     """코너로지스 API 설정"""
     base_url: str = "https://api.cornerlogis.com"
-    # API 키나 인증 정보는 환경변수에서 가져오도록 설정
+    # Authorization 헤더에 들어갈 API 키
     api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
 
 
 @dataclass
@@ -65,9 +63,7 @@ def load_app_config() -> AppConfig:
     # 코너로지스 API 설정
     cornerlogis = CornerlogisApiConfig(
         base_url=os.getenv("CORNERLOGIS_API_BASE_URL", "https://api.cornerlogis.com"),
-        api_key=os.getenv("CORNERLOGIS_API_KEY"),
-        username=os.getenv("CORNERLOGIS_USERNAME"),
-        password=os.getenv("CORNERLOGIS_PASSWORD")
+        api_key=os.getenv("CORNERLOGIS_API_KEY")
     )
     
     # 매핑 시트 설정

@@ -1,0 +1,160 @@
+{
+    "name": "Shopby ➜ Cornerlogis 일일 자동출고",
+    "nodes": [
+      {
+        "parameters": {
+          "triggerTimes": {
+            "item": [
+              {
+                "mode": "everyDay",
+                "hour": 13,
+                "minute": 0
+              }
+            ],
+            "timezone": "Asia/Seoul"
+          }
+        },
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [200, 200],
+        "name": "매일 13:00"
+      },
+      {
+        "parameters": {
+          "functionCode": "const now = new Date();\nconst KST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));\nconst y = KST.getFullYear();\nconst m = String(KST.getMonth()+1).padStart(2,'0');\nconst d = String(KST.getDate()).padStart(2,'0');\nconst from = `${y}-${m}-${d} 00:00:00`;\nconst to   = `${y}-${m}-${d} 13:00:00`;\nreturn [{ json: { from, to }}];"
+        },
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [440, 200],
+        "name": "금일 00:00~13:00 범위"
+      },
+      {
+        "parameters": {
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "url": "https://server-docs.shopby.co.kr", 
+          "options": {
+            "response": { "responseFormat": "json" }
+          },
+          "sendQuery": true,
+          "queryParametersUi": {
+            "parameter": [
+              { "name": "status", "value": "PAY_DONE" },
+              { "name": "from", "value": "={{$json.from}}" },
+              { "name": "to",   "value": "={{$json.to}}" },
+              { "name": "page", "value": "0" },
+              { "name": "size", "value": "100" }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [680, 200],
+        "name": "샵바이 주문 조회",
+        "notesInFlow": true,
+        "notes": "▶ 실제 주문 API 엔드포인트로 교체(예: https://{your-shopby-host}/server/orders)\n▶ 인증 헤더(Authorization / systemKey / mallKey 등) 크리덴셜로 연결\n▶ 페이지네이션 필요 시 Split In Batches로 루프"
+      },
+      {
+        "parameters": {
+          "operation": "read",
+          "authentication": "serviceAccount",
+          "sheetId": "1G7evb2MyxG8IBtOBn9pFmtTEyZ0uTeLZpp37XF4ntsU",
+          "range": "📍위탁수거 상품정보!A:B",
+          "options": { "rawData": false, "valueRenderMode": "UNFORMATTED_VALUE" }
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 6,
+        "position": [680, 440],
+        "name": "SKU 매핑 시트 읽기"
+      },
+      {
+        "parameters": {
+          "functionCode": "// items[0]: 샵바이 응답, items[1]: 매핑시트\nconst orders = Array.isArray(items[0].json.data) ? items[0].json.data : (items[0].json.orders || []);\nconst rows = items[1].json;\n// 시트 헤더 가정: A=SHOPBY_SKU, B=CORNERLOGIS_SKU\nconst map = new Map();\nfor (const r of rows){\n  const k = r[0]; const v = r[1];\n  if (k) map.set(String(k).trim(), v ? String(v).trim() : '');\n}\n\nfunction mapSku(shopbySku){\n  const key = String(shopbySku || '').trim();\n  if (!key) return '';\n  const hit = map.get(key);\n  return (hit && hit.length) ? hit : key; // 규칙: 매핑 실패 시 원래 SKU 유지\n}\n\n// 샵바이 주문 JSON 스키마에 맞게 필드명 조정 필요\n// 아래는 예시(주문자/수령자/주소/옵션코드/수량/결제시간/메모 등)\nreturn orders.map(o => {\n  const receiverName  = o.receiverName || o.ordererName;\n  const receiverPhone = o.receiverContact1 || o.receiverPhone || o.ordererContact1;\n  const zip           = o.receiverZipCode || o.zipCode;\n  const address       = [o.receiverAddress, o.receiverDetailAddress].filter(Boolean).join(' ');\n  const sku           = mapSku(o.optionCode || o.productManagementCd || o.optionManagementCd);\n  const qty           = Number(o.orderCnt || o.quantity || 1);\n  const orderAmt      = Number(o.lastPayAmt || o.totalPrice || 0);\n  const paidAt        = (o.paidYmdt || o.paidAt || o.registerYmdt || '').toString().slice(0,10);\n  const itemPrice     = qty > 0 ? Math.round(orderAmt/qty) : orderAmt;\n  const memo          = o.deliveryMemo || o.orderMemo || '';\n  return {\n    json: {\n      orderNo: o.orderNo,\n      name: receiverName,\n      phone: receiverPhone,\n      zip: zip,\n      address: address,\n      cornerlogisSku: sku,\n      qty: qty,\n      orderAmount: orderAmt,\n      orderDate: paidAt,\n      itemPrice: itemPrice,\n      memo: memo\n    }\n  };\n});"
+        },
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [940, 320],
+        "name": "필드 매핑 & SKU 치환"
+      },
+      {
+        "parameters": {
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "httpQueryAuth",
+          "requestMethod": "POST",
+          "url": "https://api.cornerlogis.com", 
+          "jsonParameters": true,
+          "options": { "response": { "responseFormat": "json" } },
+          "sendBody": true,
+          "bodyParametersJson": "={\n  \"orders\": [\n    {\n      \"clientOrderNo\": $json.orderNo,\n      \"receiverName\": $json.name,\n      \"receiverPhone\": $json.phone,\n      \"zipCode\": $json.zip,\n      \"address\": $json.address,\n      \"sku\": $json.cornerlogisSku,\n      \"qty\": $json.qty,\n      \"orderAmount\": $json.orderAmount,\n      \"orderDate\": $json.orderDate,\n      \"itemPrice\": $json.itemPrice,\n      \"memo\": $json.memo\n    }\n  ]\n}"
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1180, 320],
+        "name": "코너로지스 출고 생성",
+        "notesInFlow": true,
+        "notes": "▶ Swagger UI에서 실제 엔드포인트/필드명 확인 후 URL/Body 교체 (예: /api/outbound)\n▶ 인증 스킴(API Key/Bearer 등) 크리덴셜 연결"
+      },
+      {
+        "parameters": {
+          "requestMethod": "GET",
+          "url": "https://api.cornerlogis.com", 
+          "options": { "response": { "responseFormat": "json" } },
+          "sendQuery": true,
+          "queryParametersUi": {
+            "parameter": [
+              { "name": "clientOrderNo", "value": "={{$json.orderNo}}" }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1420, 320],
+        "name": "송장번호 조회(선택)",
+        "notesInFlow": true,
+        "notes": "▶ 필요 시 Swagger에서 추적/상태 조회 엔드포인트 지정"
+      },
+      {
+        "parameters": {
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "requestMethod": "PUT",
+          "url": "https://{your-shopby-host}/server/orders/{{$json.orderNo}}/delivery", 
+          "jsonParameters": true,
+          "options": { "response": { "responseFormat": "json" } },
+          "sendBody": true,
+          "bodyParametersJson": "={\n  \"deliveryCompany\": \"CJ\",\n  \"trackingNo\": $json.trackingNo,\n  \"status\": \"DELIVERY_PREPARE\"\n}"
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1660, 320],
+        "name": "샵바이 배송정보 업데이트",
+        "notesInFlow": true,
+        "notes": "▶ 실제 배송 업데이트 API 경로/바디는 shopby 문서에서 확인해 교체\n▶ 상태코드 예시는 웹훅 문서의 orderStatusType 참고(PAY_DONE/DELIVERY_PREPARE 등)"
+      },
+      {
+        "parameters": {
+          "functionCode": "const ok = items.length; return [{json:{message:`Cornerlogis 업로드 ${ok}건 완료`}}];"
+        },
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1900, 320],
+        "name": "요약 메시지"
+      }
+    ],
+    "connections": {
+      "매일 13:00": { "main": [ [ { "node": "금일 00:00~13:00 범위", "type": "main", "index": 0 } ] ] },
+      "금일 00:00~13:00 범위": { "main": [ [ { "node": "샵바이 주문 조회", "type": "main", "index": 0 } ] ] },
+      "샵바이 주문 조회": {
+        "main": [
+          [ { "node": "SKU 매핑 시트 읽기", "type": "main", "index": 0 } ],
+          [ { "node": "필드 매핑 & SKU 치환", "type": "main", "index": 0 } ]
+        ]
+      },
+      "SKU 매핑 시트 읽기": { "main": [ [ { "node": "필드 매핑 & SKU 치환", "type": "main", "index": 1 } ] ] },
+      "필드 매핑 & SKU 치환": { "main": [ [ { "node": "코너로지스 출고 생성", "type": "main", "index": 0 } ] ] },
+      "코너로지스 출고 생성": { "main": [ [ { "node": "송장번호 조회(선택)", "type": "main", "index": 0 } ] ] },
+      "송장번호 조회(선택)": { "main": [ [ { "node": "샵바이 배송정보 업데이트", "type": "main", "index": 0 } ] ] },
+      "샵바이 배송정보 업데이트": { "main": [ [ { "node": "요약 메시지", "type": "main", "index": 0 } ] ] }
+    }
+  }
+  
