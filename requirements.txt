@@ -7,3 +7,15 @@ google-auth-httplib2==0.2.0
 python-dotenv==1.0.0
 requests==2.31.0
 solapi==5.0.2
+playwright==1.46.0
+polars==1.3.0
+openpyxl==3.1.5
+XlsxWriter==3.2.0
+pytz==2024.1
+holidays==0.60
+
+# Ship_API 추가 패키지
+aiohttp>=3.9.0
+pandas>=2.0.0
+structlog>=23.2.0
+typing-extensions>=4.8.0

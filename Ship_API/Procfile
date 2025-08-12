@@ -1,0 +1,2 @@
+web: python -m Ship_API.main schedule
+worker: python -m Ship_API.main schedule
