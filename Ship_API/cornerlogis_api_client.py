@@ -163,28 +163,33 @@ class CornerlogisApiClient:
             original_sku = item.get("productCode", "") or item.get("sku", "")
             
             # SKU 매핑 적용하여 goodsId 찾기
-            goods_id = None
-            if sku_mapping and original_sku in sku_mapping:
-                # 매핑된 값이 숫자라면 goodsId로 사용
-                try:
-                    goods_id = int(sku_mapping[original_sku])
-                except (ValueError, TypeError):
-                    # 매핑된 값이 숫자가 아니라면 기본값 사용
-                    goods_id = 799109  # 기본 goodsId
-            else:
-                goods_id = 799109  # 기본 goodsId
+            goods_id = 799109  # 기본값
             
-            # 코너로지스 API 스펙에 맞는 데이터 구조
+            if sku_mapping and original_sku in sku_mapping:
+                mapped_value = str(sku_mapping[original_sku]).strip()
+                
+                # AAAAAA0000 형식인지 확인 (6자리 대문자 + 4자리 숫자)
+                import re
+                if re.match(r'^[A-Z]{6}\d{4}$', mapped_value):
+                    goods_id = mapped_value
+                # 숫자인 경우도 허용
+                elif mapped_value.isdigit():
+                    goods_id = int(mapped_value)
+                # 그 외의 경우는 기본값 유지
+                else:
+                    goods_id = 799109
+            
+            # 코너로지스 API 스펙에 맞는 데이터 구조 (완전 매핑)
             outbound_item = {
-                "companyOrderId": shopby_order.get("orderNo", ""),
-                "companyMemo": f"샵바이 주문 - {item.get('productName', '')}",
-                "orderAt": self._format_order_date(shopby_order.get("orderDate")),
-                "receiverName": shopby_order.get("recipientName", "") or shopby_order.get("customerName", ""),
-                "receiverPhone": shopby_order.get("recipientPhone", "") or shopby_order.get("customerPhone", ""),
-                "receiverAddress": self._format_address(shopby_order),
-                "receiverZipcode": shopby_order.get("deliveryZipCode", "") or shopby_order.get("zipCode", ""),
-                "receiverMemo": shopby_order.get("deliveryMemo", "") or shopby_order.get("memo", ""),
-                "price": int(item.get("totalPrice", 0) or item.get("unitPrice", 0) or 0),
+                "companyOrderId": self._extract_company_order_id(shopby_order),
+                "companyMemo": self._extract_company_memo(shopby_order, item),
+                "orderAt": self._extract_order_at(shopby_order),
+                "receiverName": self._extract_receiver_name(shopby_order),
+                "receiverPhone": self._extract_receiver_phone(shopby_order),
+                "receiverAddress": self._extract_receiver_address(shopby_order),
+                "receiverZipcode": self._extract_receiver_zipcode(shopby_order),
+                "receiverMemo": self._extract_receiver_memo(shopby_order),
+                "price": self._extract_price(item),
                 "goodsId": goods_id
             }
             
@@ -210,11 +215,131 @@ class CornerlogisApiClient:
             from datetime import datetime
             return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    def _format_address(self, shopby_order: Dict[str, Any]) -> str:
-        """주소를 한 줄로 합쳐서 반환"""
-        address1 = shopby_order.get("deliveryAddress1", "") or shopby_order.get("address1", "")
-        address2 = shopby_order.get("deliveryAddress2", "") or shopby_order.get("address2", "")
+    def _extract_company_order_id(self, shopby_order: Dict[str, Any]) -> str:
+        """주문번호 추출"""
+        return (
+            shopby_order.get("orderNo") or 
+            shopby_order.get("order_no") or 
+            shopby_order.get("orderNumber") or 
+            ""
+        )
+    
+    def _extract_company_memo(self, shopby_order: Dict[str, Any], item: Dict[str, Any]) -> str:
+        """회사 메모 생성"""
+        # 주문 경로/채널 정보 추출
+        channel_info = ""
         
+        # 결제 방식 정보
+        pay_type = shopby_order.get("payType", "")
+        if pay_type == "NAVER_PAY":
+            channel_info = "네이버페이"
+        elif pay_type:
+            channel_info = pay_type
+        
+        # 플랫폼 정보
+        platform = shopby_order.get("platformType", "")
+        if platform == "MOBILE_WEB":
+            platform_info = "모바일"
+        elif platform == "PC":
+            platform_info = "PC"
+        else:
+            platform_info = platform
+        
+        # 상품명
+        product_name = item.get("productName", "")
+        
+        # 메모 조합
+        memo_parts = []
+        if channel_info:
+            memo_parts.append(channel_info)
+        if platform_info:
+            memo_parts.append(platform_info)
+        if product_name:
+            memo_parts.append(product_name)
+        
+        if memo_parts:
+            return " - ".join(memo_parts)
+        else:
+            return "샵바이 주문"
+    
+    def _extract_order_at(self, shopby_order: Dict[str, Any]) -> str:
+        """주문일시 추출 및 형식 변환"""
+        order_date = (
+            shopby_order.get("orderYmdt") or 
+            shopby_order.get("orderDate") or 
+            shopby_order.get("order_date") or 
+            shopby_order.get("createdAt") or 
+            shopby_order.get("created_at")
+        )
+        
+        if order_date:
+            try:
+                if isinstance(order_date, str):
+                    import pandas as pd
+                    dt = pd.to_datetime(order_date)
+                    return dt.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    return str(order_date)
+            except:
+                return str(order_date)
+        
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    def _extract_receiver_name(self, shopby_order: Dict[str, Any]) -> str:
+        """수령인명 추출"""
+        return (
+            shopby_order.get("recipientName") or 
+            shopby_order.get("receiver_name") or 
+            shopby_order.get("receiverName") or 
+            shopby_order.get("customerName") or 
+            shopby_order.get("ordererName") or 
+            ""
+        )
+    
+    def _extract_receiver_phone(self, shopby_order: Dict[str, Any]) -> str:
+        """수령인 전화번호 추출"""
+        phone = (
+            shopby_order.get("recipientPhone") or 
+            shopby_order.get("recipient_phone") or 
+            shopby_order.get("receiverPhone") or 
+            shopby_order.get("receiverContact1") or 
+            shopby_order.get("customerPhone") or 
+            shopby_order.get("ordererContact1") or 
+            ""
+        )
+        
+        # 전화번호 형식 정리
+        if phone:
+            # 숫자만 추출 후 하이픈 추가
+            import re
+            numbers = re.sub(r'[^\d]', '', str(phone))
+            if len(numbers) == 11 and numbers.startswith('010'):
+                return f"{numbers[:3]}-{numbers[3:7]}-{numbers[7:]}"
+            elif len(numbers) == 10:
+                return f"{numbers[:3]}-{numbers[3:6]}-{numbers[6:]}"
+            else:
+                return phone
+        
+        return ""
+    
+    def _extract_receiver_address(self, shopby_order: Dict[str, Any]) -> str:
+        """수령인 주소 추출 및 통합"""
+        address1 = (
+            shopby_order.get("deliveryAddress1") or 
+            shopby_order.get("address1") or 
+            shopby_order.get("receiverAddress") or 
+            ""
+        )
+        
+        address2 = (
+            shopby_order.get("deliveryAddress2") or 
+            shopby_order.get("address2") or 
+            shopby_order.get("receiverDetailAddress") or 
+            ""
+        )
+        
+        # 주소 통합
         if address1 and address2:
             return f"{address1} {address2}".strip()
         elif address1:
@@ -223,6 +348,59 @@ class CornerlogisApiClient:
             return address2
         else:
             return ""
+    
+    def _extract_receiver_zipcode(self, shopby_order: Dict[str, Any]) -> str:
+        """우편번호 추출"""
+        zipcode = (
+            shopby_order.get("deliveryZipCode") or 
+            shopby_order.get("zipCode") or 
+            shopby_order.get("zip_code") or 
+            shopby_order.get("receiverZipCd") or 
+            shopby_order.get("postCode") or 
+            ""
+        )
+        
+        # 우편번호 형식 정리 (숫자만)
+        if zipcode:
+            import re
+            return re.sub(r'[^\d]', '', str(zipcode))
+        
+        return ""
+    
+    def _extract_receiver_memo(self, shopby_order: Dict[str, Any]) -> str:
+        """배송 메모 추출"""
+        memo = (
+            shopby_order.get("deliveryMemo") or 
+            shopby_order.get("delivery_memo") or 
+            shopby_order.get("receiverMemo") or 
+            shopby_order.get("shippingMemo") or 
+            shopby_order.get("orderMemo") or 
+            shopby_order.get("memo") or 
+            ""
+        )
+        
+        # 메모 길이 제한 (100자)
+        if memo and len(str(memo)) > 100:
+            return str(memo)[:100] + "..."
+        
+        return str(memo) if memo else ""
+    
+    def _extract_price(self, item: Dict[str, Any]) -> int:
+        """상품 가격 추출"""
+        price = (
+            item.get("totalPrice") or 
+            item.get("total_price") or 
+            item.get("adjustedAmt") or 
+            item.get("salePrice") or 
+            item.get("unitPrice") or 
+            item.get("unit_price") or 
+            0
+        )
+        
+        try:
+            return int(float(price))
+        except (ValueError, TypeError):
+            return 0
 
 
 # 사용 예시 및 테스트 함수

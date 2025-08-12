@@ -60,15 +60,17 @@ def load_sku_mapping_from_sheets(
         values = result.get('values', [])
         
         # SKU 매핑 딕셔너리 생성
+        # 사용자 요청: col_10(J열) = shopby_sku, col_9(I열) = cornerlogis_goodsId
         sku_mapping = {}
         
         for i, row in enumerate(values):
             if len(row) >= 2 and i > 0:  # 헤더 행 건너뛰기
-                shopby_sku = str(row[0]).strip() if row[0] else ""
-                cornerlogis_sku = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+                # row[0] = I열(goodsId), row[1] = J열(shopby_sku)
+                cornerlogis_goods_id = str(row[0]).strip() if row[0] else ""
+                shopby_sku = str(row[1]).strip() if len(row) > 1 and row[1] else ""
                 
-                if shopby_sku and cornerlogis_sku:
-                    sku_mapping[shopby_sku] = cornerlogis_sku
+                if shopby_sku and cornerlogis_goods_id:
+                    sku_mapping[shopby_sku] = cornerlogis_goods_id
         
         print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
         return sku_mapping
