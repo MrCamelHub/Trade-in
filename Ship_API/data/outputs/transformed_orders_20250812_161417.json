@@ -1,0 +1,24 @@
+[
+  {
+    "orderNo": "",
+    "orderDate": "2025-08-12 16:14:17",
+    "customer": {
+      "name": "",
+      "phone": "",
+      "email": ""
+    },
+    "delivery": {
+      "recipientName": "",
+      "recipientPhone": "",
+      "zipCode": "",
+      "address1": "",
+      "address2": "",
+      "memo": ""
+    },
+    "items": [],
+    "totalAmount": 0,
+    "memo": "",
+    "urgency": "NORMAL",
+    "shippingMethod": "STANDARD"
+  }
+]

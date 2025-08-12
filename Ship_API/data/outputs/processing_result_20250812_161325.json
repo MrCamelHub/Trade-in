@@ -1,0 +1,12 @@
+{
+  "start_time": "2025-08-12T16:13:23.604969",
+  "status": "started",
+  "shopby_orders_count": 1,
+  "transformed_orders_count": 1,
+  "cornerlogis_success_count": 0,
+  "cornerlogis_failure_count": 1,
+  "errors": [
+    "주문 ORDER_1: 변환할 상품이 없습니다"
+  ],
+  "processed_orders": []
+}

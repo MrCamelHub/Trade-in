@@ -50,11 +50,12 @@ def load_sku_mapping_from_sheets(
         # Google Sheets API 서비스 생성
         service = build('sheets', 'v4', credentials=creds)
         
-        # 시트 데이터 조회
-        range_name = f"{tab_name}!{shopby_sku_col}:{cornerlogis_sku_col}"
+        # 시트 데이터 조회 - 충분히 큰 범위로 설정 (최대 5000행)
+        range_name = f"{tab_name}!{cornerlogis_sku_col}1:{shopby_sku_col}5000"
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range=range_name
+            range=range_name,
+            majorDimension='ROWS'
         ).execute()
         
         values = result.get('values', [])
@@ -64,13 +65,24 @@ def load_sku_mapping_from_sheets(
         sku_mapping = {}
         
         for i, row in enumerate(values):
-            if len(row) >= 2 and i > 0:  # 헤더 행 건너뛰기
-                # row[0] = I열(goodsId), row[1] = J열(shopby_sku)
-                cornerlogis_goods_id = str(row[0]).strip() if row[0] else ""
-                shopby_sku = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+            if i == 0:  # 헤더 행 건너뛰기
+                continue
                 
-                if shopby_sku and cornerlogis_goods_id:
-                    sku_mapping[shopby_sku] = cornerlogis_goods_id
+            # 행이 비어있거나 너무 짧은 경우도 처리
+            if len(row) == 0:
+                continue
+            elif len(row) == 1:
+                # I열만 있는 경우
+                cornerlogis_goods_id = str(row[0]).strip() if row[0] else ""
+                shopby_sku = ""
+            else:
+                # I열, J열 모두 있는 경우
+                cornerlogis_goods_id = str(row[0]).strip() if row[0] else ""
+                shopby_sku = str(row[1]).strip() if row[1] else ""
+            
+            # 둘 다 값이 있을 때만 매핑에 추가
+            if shopby_sku and cornerlogis_goods_id:
+                sku_mapping[shopby_sku] = cornerlogis_goods_id
         
         print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
         return sku_mapping

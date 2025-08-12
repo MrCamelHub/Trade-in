@@ -18,7 +18,7 @@ class ShopbyApiConfig:
 @dataclass
 class CornerlogisApiConfig:
     """코너로지스 API 설정"""
-    base_url: str = "https://api.cornerlogis.com"
+    base_url: str = "https://devapi.cornerlogis.com"
     # Authorization 헤더에 들어갈 API 키
     api_key: Optional[str] = None
 
@@ -62,7 +62,7 @@ def load_app_config() -> AppConfig:
     
     # 코너로지스 API 설정
     cornerlogis = CornerlogisApiConfig(
-        base_url=os.getenv("CORNERLOGIS_API_BASE_URL", "https://api.cornerlogis.com"),
+        base_url=os.getenv("CORNERLOGIS_API_BASE_URL", "https://devapi.cornerlogis.com"),
         api_key=os.getenv("CORNERLOGIS_API_KEY")
     )
     

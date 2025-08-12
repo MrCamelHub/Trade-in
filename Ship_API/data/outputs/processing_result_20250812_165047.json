@@ -1,0 +1,33 @@
+{
+  "start_time": "2025-08-12T16:50:43.949872",
+  "status": "started",
+  "shopby_orders_count": 1,
+  "transformed_orders_count": 1,
+  "cornerlogis_success_count": 2,
+  "cornerlogis_failure_count": 0,
+  "errors": [],
+  "processed_orders": [
+    {
+      "orderNo": "202508121611182244",
+      "status": "success",
+      "items_count": 3,
+      "cornerlogis_result": {
+        "error": {
+          "code": "INVALID_REQUEST_DATA",
+          "message": "잘못된 요청 데이터입니다."
+        }
+      }
+    },
+    {
+      "orderNo": "202508121411165234",
+      "status": "success",
+      "items_count": 6,
+      "cornerlogis_result": {
+        "error": {
+          "code": "INVALID_REQUEST_DATA",
+          "message": "잘못된 요청 데이터입니다."
+        }
+      }
+    }
+  ]
+}

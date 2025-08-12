@@ -162,22 +162,28 @@ class CornerlogisApiClient:
         for item in items:
             original_sku = item.get("productCode", "") or item.get("sku", "")
             
-            # SKU 매핑 적용하여 goodsId 찾기
-            goods_id = 799109  # 기본값
+            # 샵바이 productManagementCd 추출 (기본 goodsId로 사용)
+            product_management_cd = (
+                item.get("productManagementCd") or 
+                item.get("product_management_cd") or 
+                item.get("productCode") or 
+                item.get("sku") or 
+                799109  # 최후 기본값
+            )
+            
+            # SKU 매핑 적용하여 goodsId 결정
+            goods_id = product_management_cd  # 기본적으로 productManagementCd 사용
             
             if sku_mapping and original_sku in sku_mapping:
                 mapped_value = str(sku_mapping[original_sku]).strip()
                 
-                # AAAAAA0000 형식인지 확인 (6자리 대문자 + 4자리 숫자)
+                # 경우 1: AAAAAA0000 형식인지 확인 (6자리 대문자 + 4자리 숫자)
                 import re
                 if re.match(r'^[A-Z]{6}\d{4}$', mapped_value):
-                    goods_id = mapped_value
-                # 숫자인 경우도 허용
-                elif mapped_value.isdigit():
-                    goods_id = int(mapped_value)
-                # 그 외의 경우는 기본값 유지
+                    goods_id = mapped_value  # 경우 1이면 매핑값 사용
                 else:
-                    goods_id = 799109
+                    # 경우 1이 아니면 샵바이 productManagementCd 그대로 사용
+                    goods_id = int(product_management_cd) if str(product_management_cd).isdigit() else product_management_cd
             
             # 코너로지스 API 스펙에 맞는 데이터 구조 (완전 매핑)
             outbound_item = {
