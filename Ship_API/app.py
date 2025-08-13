@@ -178,6 +178,72 @@ def debug_shopby():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/get-new-token', methods=['POST'])
+def get_new_token():
+    """Railway IP에서 새로운 샵바이 토큰 발급"""
+    try:
+        import asyncio
+        import aiohttp
+        import json
+        
+        async def request_new_token():
+            token_data = {
+                "code": "soV07uJKp2MF",
+                "grant_type": "authorization_code", 
+                "client_secret": "WtecrihxmAz3Lu3uvAnzrw9PN4i1Cocc",
+                "redirect_uri": "https://bonibello.re-hi.co.kr",
+                "client_id": "b1hLbVFoS1lUeUZIM0QrZTNuNklUQT09"
+            }
+            
+            headers = {
+                "Version": "1.0",
+                "Content-Type": "application/json"
+            }
+            
+            url = "https://server-api.e-ncp.com/auth/token/long-lived"
+            
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.post(
+                        url,
+                        headers=headers,
+                        json=token_data
+                    ) as response:
+                        response_text = await response.text()
+                        
+                        result = {
+                            "status_code": response.status,
+                            "headers_sent": headers,
+                            "body_sent": token_data,
+                            "url": url,
+                            "response_text": response_text
+                        }
+                        
+                        if response.status == 200:
+                            try:
+                                response_json = json.loads(response_text)
+                                result["response_json"] = response_json
+                                if "access_token" in response_json:
+                                    result["new_access_token"] = response_json["access_token"]
+                            except json.JSONDecodeError:
+                                result["json_parse_error"] = "Response is not valid JSON"
+                        
+                        return result
+                        
+                except Exception as e:
+                    return {
+                        "error": str(e),
+                        "url": url,
+                        "headers_sent": headers,
+                        "body_sent": token_data
+                    }
+        
+        result = asyncio.run(request_new_token())
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/schedule-shopby', methods=['POST'])
 def schedule_shopby():
     """스케줄된 샵바이 작업 실행"""
