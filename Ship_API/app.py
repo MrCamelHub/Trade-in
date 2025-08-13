@@ -130,6 +130,54 @@ def test():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/debug-shopby')
+def debug_shopby():
+    """샵바이 API 디버깅"""
+    try:
+        import asyncio
+        from config import load_app_config
+        from shopby_api_client import ShopbyApiClient
+        
+        async def debug_headers():
+            config = load_app_config()
+            
+            debug_info = {
+                "config": {
+                    "base_url": config.shopby.base_url,
+                    "system_key": config.shopby.system_key[:20] + "...",
+                    "auth_token": config.shopby.auth_token[:50] + "...",
+                    "version": config.shopby.version
+                },
+                "env_vars": {
+                    "SHOPBY_API_BASE_URL": os.getenv("SHOPBY_API_BASE_URL"),
+                    "SHOPBY_SYSTEM_KEY": os.getenv("SHOPBY_SYSTEM_KEY", "")[:20] + "..." if os.getenv("SHOPBY_SYSTEM_KEY") else None,
+                    "SHOPBY_AUTH_TOKEN": os.getenv("SHOPBY_AUTH_TOKEN", "")[:50] + "..." if os.getenv("SHOPBY_AUTH_TOKEN") else None,
+                    "SHOPBY_API_VERSION": os.getenv("SHOPBY_API_VERSION")
+                }
+            }
+            
+            # 헤더 생성 테스트
+            async with ShopbyApiClient(config.shopby) as client:
+                headers = client._get_headers()
+                debug_info["headers"] = headers
+                
+                try:
+                    # 간단한 API 호출 시도
+                    orders = await client.get_all_pay_done_orders(days_back=1)
+                    debug_info["api_call"] = "success"
+                    debug_info["orders_count"] = len(orders) if orders else 0
+                except Exception as api_error:
+                    debug_info["api_call"] = "failed"
+                    debug_info["api_error"] = str(api_error)
+            
+            return debug_info
+        
+        result = asyncio.run(debug_headers())
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/schedule-shopby', methods=['POST'])
 def schedule_shopby():
     """스케줄된 샵바이 작업 실행"""
