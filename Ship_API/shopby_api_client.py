@@ -149,6 +149,27 @@ class ShopbyApiClient:
         start_date = end_date - timedelta(days=days_back)
         
         return await self.get_orders(start_date=start_date, end_date=end_date)
+    
+    async def get_all_pay_done_orders(
+        self,
+        days_back: int = 30
+    ) -> List[Dict[str, Any]]:
+        """
+        모든 결제완료(PAY_DONE) 주문 조회
+        
+        Args:
+            days_back: 조회 기간 (기본 30일, 충분히 큰 값 설정 가능)
+        
+        Returns:
+            모든 결제완료 주문 목록
+        """
+        kst = pytz.timezone("Asia/Seoul")
+        end_date = datetime.now(kst)
+        start_date = end_date - timedelta(days=days_back)
+        
+        print(f"🔍 결제완료 주문 조회 기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
+        
+        return await self.get_orders(start_date=start_date, end_date=end_date, order_status="PAY_DONE")
 
 
 # 사용 예시 및 테스트 함수

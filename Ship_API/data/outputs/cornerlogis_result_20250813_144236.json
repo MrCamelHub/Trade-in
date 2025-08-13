@@ -1,0 +1,174 @@
+{
+  "start_time": "2025-08-13T14:42:36.126362",
+  "status": "started",
+  "cornerlogis_success_count": 1,
+  "cornerlogis_failure_count": 0,
+  "errors": [],
+  "processed_orders": [
+    {
+      "orderNo": "202508131439556208",
+      "status": "success",
+      "items_count": 3,
+      "cornerlogis_result": {
+        "data": {
+          "outboundId": 10243,
+          "mappingIds": [
+            {
+              "cornerOrderId": 1755063757022,
+              "companyOrderId": "202508131439556208",
+              "orderItemList": [
+                {
+                  "orderItemId": 1204091,
+                  "companyOrderId": "202508131439556208",
+                  "companyMemo": "CREDIT_CARD - PC - 몽클레어 퀼팅 화이트 패딩 3y",
+                  "status": "RECEIVING_SHIPMENTS",
+                  "goodsId": 1082917,
+                  "goodsCode": "AAAETK0004",
+                  "goodsSex": "B",
+                  "category": "clothing",
+                  "quantity": 1,
+                  "price": 178000,
+                  "imgUrl": "https://d1hx0powguntjy.cloudfront.net/goods/1082917/1s.jpg",
+                  "brandEnName": "MONCLER",
+                  "brandKrName": "몽클레어",
+                  "receiver": {
+                    "name": "김준경",
+                    "phone": "010-9175-3316",
+                    "address": "서울 용산구 새창로 70 111동 1703호",
+                    "zipcode": "04354",
+                    "memo": ""
+                  },
+                  "returnReceiver": {
+                    "name": null,
+                    "phone": null,
+                    "address": null,
+                    "zipcode": null,
+                    "memo": null
+                  },
+                  "outbound": {
+                    "requestAt": "2025-08-13 14:39:55",
+                    "readyAt": null,
+                    "startAt": null,
+                    "cancelRequestAt": null
+                  },
+                  "delivery": {
+                    "code": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null
+                  },
+                  "returns": {
+                    "code": null,
+                    "requestAt": null,
+                    "receiptCompleteAt": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null,
+                    "completeAt": null,
+                    "memo": null
+                  }
+                },
+                {
+                  "orderItemId": 1204090,
+                  "companyOrderId": "202508131439556208",
+                  "companyMemo": "CREDIT_CARD - PC - 보보쇼즈 후리스 자켓 4-5y",
+                  "status": "RECEIVING_SHIPMENTS",
+                  "goodsId": 1071779,
+                  "goodsCode": "50001971",
+                  "goodsSex": "C",
+                  "category": "none",
+                  "quantity": 1,
+                  "price": 46000,
+                  "imgUrl": "https://s3.ap-northeast-2.amazonaws.com/re-hi.co.kr/bonibello/product/50001971_0.jpg",
+                  "brandEnName": null,
+                  "brandKrName": null,
+                  "receiver": {
+                    "name": "김준경",
+                    "phone": "010-9175-3316",
+                    "address": "서울 용산구 새창로 70 111동 1703호",
+                    "zipcode": "04354",
+                    "memo": ""
+                  },
+                  "returnReceiver": {
+                    "name": null,
+                    "phone": null,
+                    "address": null,
+                    "zipcode": null,
+                    "memo": null
+                  },
+                  "outbound": {
+                    "requestAt": "2025-08-13 14:39:55",
+                    "readyAt": null,
+                    "startAt": null,
+                    "cancelRequestAt": null
+                  },
+                  "delivery": {
+                    "code": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null
+                  },
+                  "returns": {
+                    "code": null,
+                    "requestAt": null,
+                    "receiptCompleteAt": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null,
+                    "completeAt": null,
+                    "memo": null
+                  }
+                },
+                {
+                  "orderItemId": 1204089,
+                  "companyOrderId": "202508131439556208",
+                  "companyMemo": "CREDIT_CARD - PC - 미니로디니 반팔티 3-5y",
+                  "status": "RECEIVING_SHIPMENTS",
+                  "goodsId": 1069856,
+                  "goodsCode": "50001097",
+                  "goodsSex": "C",
+                  "category": "none",
+                  "quantity": 1,
+                  "price": 14000,
+                  "imgUrl": "https://s3.ap-northeast-2.amazonaws.com/re-hi.co.kr/bonibello/product/50001097_0.jpg",
+                  "brandEnName": null,
+                  "brandKrName": null,
+                  "receiver": {
+                    "name": "김준경",
+                    "phone": "010-9175-3316",
+                    "address": "서울 용산구 새창로 70 111동 1703호",
+                    "zipcode": "04354",
+                    "memo": ""
+                  },
+                  "returnReceiver": {
+                    "name": null,
+                    "phone": null,
+                    "address": null,
+                    "zipcode": null,
+                    "memo": null
+                  },
+                  "outbound": {
+                    "requestAt": "2025-08-13 14:39:55",
+                    "readyAt": null,
+                    "startAt": null,
+                    "cancelRequestAt": null
+                  },
+                  "delivery": {
+                    "code": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null
+                  },
+                  "returns": {
+                    "code": null,
+                    "requestAt": null,
+                    "receiptCompleteAt": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null,
+                    "completeAt": null,
+                    "memo": null
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

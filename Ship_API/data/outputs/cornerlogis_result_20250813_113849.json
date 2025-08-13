@@ -1,0 +1,187 @@
+{
+  "start_time": "2025-08-13T11:38:47.758568",
+  "status": "started",
+  "cornerlogis_success_count": 1,
+  "cornerlogis_failure_count": 2,
+  "errors": [
+    "주문 202508130120282137 처리 중 오류: 400, message='Bad Request', url='https://devapi.cornerlogis.com/api/v1/outbound/saveOutbound'",
+    "주문 202508121411165234 처리 중 오류: 400, message='Bad Request', url='https://devapi.cornerlogis.com/api/v1/outbound/saveOutbound'"
+  ],
+  "processed_orders": [
+    {
+      "orderNo": "202508130120282137",
+      "status": "error",
+      "error": "400, message='Bad Request', url='https://devapi.cornerlogis.com/api/v1/outbound/saveOutbound'"
+    },
+    {
+      "orderNo": "202508121611182244",
+      "status": "success",
+      "items_count": 3,
+      "cornerlogis_result": {
+        "data": {
+          "outboundId": 10232,
+          "mappingIds": [
+            {
+              "cornerOrderId": 1755052728673,
+              "companyOrderId": "202508121611182244",
+              "orderItemList": [
+                {
+                  "orderItemId": 1204082,
+                  "companyOrderId": "202508121611182244",
+                  "companyMemo": "CREDIT_CARD - 모바일 - 오그오그오그 라인 베이지 스웨트셔츠 8y",
+                  "status": "RECEIVING_SHIPMENTS",
+                  "goodsId": 2005947,
+                  "goodsCode": "AAAGHG0002",
+                  "goodsSex": "C",
+                  "category": "clothing",
+                  "quantity": 1,
+                  "price": 24000,
+                  "imgUrl": "https://d1hx0powguntjy.cloudfront.net/goods/2005947/1s.jpg",
+                  "brandEnName": "Och Och Og",
+                  "brandKrName": "오그오그오그",
+                  "receiver": {
+                    "name": "정재희",
+                    "phone": "010-3114-8128",
+                    "address": "부산 해운대구 선수촌로 30 103동301호",
+                    "zipcode": "48043",
+                    "memo": ""
+                  },
+                  "returnReceiver": {
+                    "name": null,
+                    "phone": null,
+                    "address": null,
+                    "zipcode": null,
+                    "memo": null
+                  },
+                  "outbound": {
+                    "requestAt": "2025-08-12 16:11:18",
+                    "readyAt": null,
+                    "startAt": null,
+                    "cancelRequestAt": null
+                  },
+                  "delivery": {
+                    "code": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null
+                  },
+                  "returns": {
+                    "code": null,
+                    "requestAt": null,
+                    "receiptCompleteAt": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null,
+                    "completeAt": null,
+                    "memo": null
+                  }
+                },
+                {
+                  "orderItemId": 1204081,
+                  "companyOrderId": "202508121611182244",
+                  "companyMemo": "CREDIT_CARD - 모바일 - 베네통 드롭숄더 화이트 티셔츠 140cm",
+                  "status": "RECEIVING_SHIPMENTS",
+                  "goodsId": 2005933,
+                  "goodsCode": "AAAGJB0001",
+                  "goodsSex": "G",
+                  "category": "clothing",
+                  "quantity": 1,
+                  "price": 15000,
+                  "imgUrl": "https://d1hx0powguntjy.cloudfront.net/goods/2005933/1s.jpg",
+                  "brandEnName": "BENETTON",
+                  "brandKrName": "베네통",
+                  "receiver": {
+                    "name": "정재희",
+                    "phone": "010-3114-8128",
+                    "address": "부산 해운대구 선수촌로 30 103동301호",
+                    "zipcode": "48043",
+                    "memo": ""
+                  },
+                  "returnReceiver": {
+                    "name": null,
+                    "phone": null,
+                    "address": null,
+                    "zipcode": null,
+                    "memo": null
+                  },
+                  "outbound": {
+                    "requestAt": "2025-08-12 16:11:18",
+                    "readyAt": null,
+                    "startAt": null,
+                    "cancelRequestAt": null
+                  },
+                  "delivery": {
+                    "code": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null
+                  },
+                  "returns": {
+                    "code": null,
+                    "requestAt": null,
+                    "receiptCompleteAt": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null,
+                    "completeAt": null,
+                    "memo": null
+                  }
+                },
+                {
+                  "orderItemId": 1204083,
+                  "companyOrderId": "202508121611182244",
+                  "companyMemo": "CREDIT_CARD - 모바일 - 아이스비스킷 단추 네이비 폴로셔츠 130cm",
+                  "status": "RECEIVING_SHIPMENTS",
+                  "goodsId": 2005879,
+                  "goodsCode": "AAAGHQ0003",
+                  "goodsSex": "G",
+                  "category": "clothing",
+                  "quantity": 1,
+                  "price": 11000,
+                  "imgUrl": "https://d1hx0powguntjy.cloudfront.net/goods/2005879/1s.jpg",
+                  "brandEnName": "ICEBISCUIT",
+                  "brandKrName": "아이스비스킷",
+                  "receiver": {
+                    "name": "정재희",
+                    "phone": "010-3114-8128",
+                    "address": "부산 해운대구 선수촌로 30 103동301호",
+                    "zipcode": "48043",
+                    "memo": ""
+                  },
+                  "returnReceiver": {
+                    "name": null,
+                    "phone": null,
+                    "address": null,
+                    "zipcode": null,
+                    "memo": null
+                  },
+                  "outbound": {
+                    "requestAt": "2025-08-12 16:11:18",
+                    "readyAt": null,
+                    "startAt": null,
+                    "cancelRequestAt": null
+                  },
+                  "delivery": {
+                    "code": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null
+                  },
+                  "returns": {
+                    "code": null,
+                    "requestAt": null,
+                    "receiptCompleteAt": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null,
+                    "completeAt": null,
+                    "memo": null
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "orderNo": "202508121411165234",
+      "status": "error",
+      "error": "400, message='Bad Request', url='https://devapi.cornerlogis.com/api/v1/outbound/saveOutbound'"
+    }
+  ]
+}

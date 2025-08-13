@@ -1,0 +1,76 @@
+{
+  "start_time": "2025-08-13T11:33:38.215957",
+  "status": "started",
+  "cornerlogis_success_count": 1,
+  "cornerlogis_failure_count": 0,
+  "errors": [],
+  "processed_orders": [
+    {
+      "orderNo": "202508130120282137",
+      "status": "success",
+      "items_count": 1,
+      "cornerlogis_result": {
+        "data": {
+          "outboundId": 10230,
+          "mappingIds": [
+            {
+              "cornerOrderId": 1755052418799,
+              "companyOrderId": "202508130120282137",
+              "orderItemList": [
+                {
+                  "orderItemId": 1204080,
+                  "companyOrderId": "202508130120282137",
+                  "companyMemo": "CREDIT_CARD - 모바일 - 베베드피노 타이거 바디수트 세트 85cm",
+                  "status": "RECEIVING_SHIPMENTS",
+                  "goodsId": 1068666,
+                  "goodsCode": "50000726",
+                  "goodsSex": "C",
+                  "category": "none",
+                  "quantity": 1,
+                  "price": 18000,
+                  "imgUrl": "https://s3.ap-northeast-2.amazonaws.com/re-hi.co.kr/bonibello/product/50000726_0.jpg",
+                  "brandEnName": null,
+                  "brandKrName": null,
+                  "receiver": {
+                    "name": "지은심",
+                    "phone": "010-5286-2916",
+                    "address": "경기 김포시 김포한강4로420번길 163 506동 2304호",
+                    "zipcode": "10063",
+                    "memo": ""
+                  },
+                  "returnReceiver": {
+                    "name": null,
+                    "phone": null,
+                    "address": null,
+                    "zipcode": null,
+                    "memo": null
+                  },
+                  "outbound": {
+                    "requestAt": "2025-08-13 01:20:28",
+                    "readyAt": null,
+                    "startAt": null,
+                    "cancelRequestAt": null
+                  },
+                  "delivery": {
+                    "code": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null
+                  },
+                  "returns": {
+                    "code": null,
+                    "requestAt": null,
+                    "receiptCompleteAt": null,
+                    "pickupCompleteAt": null,
+                    "arrivalAt": null,
+                    "completeAt": null,
+                    "memo": null
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

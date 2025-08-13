@@ -494,6 +494,72 @@ class CornerlogisApiClient:
         except (ValueError, TypeError):
             return 0
 
+    async def get_orders(
+        self,
+        start_date: str,
+        end_date: str,
+        company_order_id: str = None,
+        page: int = 1,
+        size: int = 100
+    ) -> Dict[str, Any]:
+        """
+        코너로지스 주문 조회
+        
+        Args:
+            start_date: 검색 시작일 (YYYY-MM-DD)
+            end_date: 검색 종료일 (YYYY-MM-DD)
+            company_order_id: 고객사 주문번호 (선택)
+            page: 페이지 번호 (기본값: 1)
+            size: 페이지 크기 (기본값: 100)
+        
+        Returns:
+            주문 조회 결과
+        """
+        if not self.session:
+            raise RuntimeError("ClientSession not initialized. Use async context manager.")
+        
+        url = f"{self.config.base_url}/api/v1/order/getOrders"
+        headers = self._get_headers()
+        
+        params = {
+            "startDate": start_date,
+            "endDate": end_date,
+            "page": page,
+            "size": size
+        }
+        
+        if company_order_id:
+            params["companyOrderId"] = company_order_id
+        
+        try:
+            async with self.session.get(
+                url, 
+                headers=headers, 
+                params=params
+            ) as response:
+                response.raise_for_status()
+                result = await response.json()
+                
+                print(f"코너로지스 주문 조회 성공")
+                if "data" in result:
+                    orders = result["data"].get("list", [])
+                    total = result["data"].get("totalCount", 0)
+                    print(f"조회된 주문 수: {len(orders)}/{total}개")
+                
+                return result
+                
+        except aiohttp.ClientError as e:
+            print(f"코너로지스 주문 조회 실패: {e}")
+            try:
+                error_text = await response.text()
+                print(f"에러 응답: {error_text}")
+            except:
+                pass
+            raise
+        except json.JSONDecodeError as e:
+            print(f"코너로지스 주문 조회 응답 파싱 실패: {e}")
+            raise
+
 
 # 사용 예시 및 테스트 함수
 async def test_cornerlogis_api():

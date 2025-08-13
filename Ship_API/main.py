@@ -93,8 +93,8 @@ async def process_shopby_orders() -> Dict[str, Any]:
         shopby_orders = []
         
         async with ShopbyApiClient(config.shopby) as shopby_client:
-            # 오늘 주문 조회
-            shopby_orders = await shopby_client.get_today_orders()
+            # 모든 결제완료 주문 조회 (PAY_DONE 상태)
+            shopby_orders = await shopby_client.get_all_pay_done_orders(days_back=30)
             result["shopby_orders_count"] = len(shopby_orders)
             print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개 주문")
         
@@ -137,9 +137,22 @@ async def process_shopby_orders() -> Dict[str, Any]:
         
         # 3. 데이터 변환
         print("3. 주문 데이터 변환 중...")
+        
+        # 샵바이 API 응답 구조 처리 (변환용)
+        if isinstance(shopby_orders, list) and len(shopby_orders) > 0:
+            if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
+                # API 응답에서 실제 주문 데이터 추출
+                actual_orders_for_transform = shopby_orders[0]['contents']
+                print(f"실제 주문 수 추출: {len(actual_orders_for_transform)}개")
+            else:
+                actual_orders_for_transform = shopby_orders
+        else:
+            actual_orders_for_transform = shopby_orders
+        
         transformer = ShopbyToCornerlogisTransformer(sku_mapping)
-        transformed_orders = transformer.transform_orders(shopby_orders)
+        transformed_orders = transformer.transform_orders(actual_orders_for_transform)
         result["transformed_orders_count"] = len(transformed_orders)
+        result["shopby_orders_count"] = len(actual_orders_for_transform)  # 실제 주문 수로 업데이트
         print(f"데이터 변환 완료: {len(transformed_orders)}개 주문")
         
         if not transformed_orders:
@@ -150,7 +163,7 @@ async def process_shopby_orders() -> Dict[str, Any]:
         
         # 4. 샵바이 주문 데이터를 파일로 저장 (1:30에 읽을 수 있도록)
         print("4. 샵바이 주문 데이터 저장 중...")
-        await save_shopby_orders(config, shopby_orders, transformed_orders)
+        await save_shopby_orders(config, actual_orders_for_transform, transformed_orders)
         
         result["status"] = "completed"
         result["end_time"] = datetime.now().isoformat()

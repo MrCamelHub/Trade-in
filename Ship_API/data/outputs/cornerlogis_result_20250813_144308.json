@@ -1,0 +1,16 @@
+{
+  "start_time": "2025-08-13T14:43:07.819147",
+  "status": "started",
+  "cornerlogis_success_count": 0,
+  "cornerlogis_failure_count": 1,
+  "errors": [
+    "주문 202508131439556208 처리 중 오류: 400, message='Bad Request', url='https://devapi.cornerlogis.com/api/v1/outbound/saveOutbound'"
+  ],
+  "processed_orders": [
+    {
+      "orderNo": "202508131439556208",
+      "status": "error",
+      "error": "400, message='Bad Request', url='https://devapi.cornerlogis.com/api/v1/outbound/saveOutbound'"
+    }
+  ]
+}
