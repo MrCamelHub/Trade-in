@@ -76,12 +76,21 @@ class ShopbyApiClient:
         headers = self._get_headers()
         
         try:
+            # URL 파라미터를 수동으로 구성하여 인코딩 문제 해결
+            from urllib.parse import urlencode, quote
+            
+            # 공백을 %20으로 인코딩 (+ 대신)
+            encoded_params = urlencode(params, quote_via=quote)
+            full_url = f"{url}?{encoded_params}"
+            
             print(f"🔍 샵바이 API 호출 디버깅:")
-            print(f"  URL: {url}")
+            print(f"  Base URL: {url}")
+            print(f"  Full URL: {full_url}")
             print(f"  Headers: {headers}")
             print(f"  Params: {params}")
             
-            async with self.session.get(url, headers=headers, params=params) as response:
+            # params를 URL에 직접 포함시켜서 호출
+            async with self.session.get(full_url, headers=headers) as response:
                 print(f"  Response Status: {response.status}")
                 response.raise_for_status()
                 data = await response.json()
