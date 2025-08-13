@@ -198,6 +198,50 @@ class ShopbyApiClient:
         
         return await self.get_orders(start_date=start_date, end_date=end_date, order_status="PAY_DONE")
 
+    async def get_pay_done_orders_chunked(
+        self,
+        days_back: int = 30,
+        chunk_days: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        기간을 잘게 나눠서(PAY_DONE) 주문을 합쳐 반환
+        일부 환경에서 긴 기간 조회가 400을 유발하는 문제를 회피
+        """
+        kst = pytz.timezone("Asia/Seoul")
+        utc_now = datetime.utcnow()
+        end_dt_kst = utc_now.replace(tzinfo=pytz.UTC).astimezone(kst)
+        start_dt_kst = end_dt_kst - timedelta(days=days_back)
+
+        print(f"🧩 청크 조회 시작: {start_dt_kst.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_dt_kst.strftime('%Y-%m-%d %H:%M:%S')} (chunk={chunk_days}d)")
+
+        aggregated: List[Dict[str, Any]] = []
+
+        current_start = start_dt_kst
+        while current_start < end_dt_kst:
+            current_end = min(current_start + timedelta(days=chunk_days), end_dt_kst)
+            try:
+                chunk = await self.get_orders(start_date=current_start, end_date=current_end, order_status="PAY_DONE")
+                # 응답 형태 정규화
+                if isinstance(chunk, list):
+                    # 일부 구현에서 [ { 'contents': [...] } ] 형태일 수 있음
+                    if len(chunk) > 0 and isinstance(chunk[0], dict) and 'contents' in chunk[0]:
+                        contents = chunk[0]['contents'] or []
+                        aggregated.extend(contents)
+                    else:
+                        aggregated.extend(chunk)
+                elif isinstance(chunk, dict) and 'contents' in chunk:
+                    aggregated.extend(chunk['contents'] or [])
+                else:
+                    # 알 수 없는 형태는 스킵
+                    pass
+                print(f"  ✅ 청크 성공: {current_start.strftime('%Y-%m-%d')} ~ {current_end.strftime('%Y-%m-%d')} (+{len(aggregated)} 누적)")
+            except Exception as e:
+                print(f"  ❌ 청크 실패: {current_start} ~ {current_end} → {e}")
+            current_start = current_end
+
+        print(f"🧮 청크 합산 결과: 총 {len(aggregated)}건")
+        return aggregated
+
 
 # 사용 예시 및 테스트 함수
 async def test_shopby_api():
