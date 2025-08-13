@@ -76,7 +76,13 @@ class ShopbyApiClient:
         headers = self._get_headers()
         
         try:
+            print(f"🔍 샵바이 API 호출 디버깅:")
+            print(f"  URL: {url}")
+            print(f"  Headers: {headers}")
+            print(f"  Params: {params}")
+            
             async with self.session.get(url, headers=headers, params=params) as response:
+                print(f"  Response Status: {response.status}")
                 response.raise_for_status()
                 data = await response.json()
                 
