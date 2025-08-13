@@ -622,5 +622,84 @@ async def test_workflow():
     }
 
 
+async def run_full_workflow():
+    """전체 워크플로우 실행 (샵바이 조회 + 코너로지스 업로드)"""
+    print("=" * 80)
+    print("🚀 전체 워크플로우 실행")
+    print("=" * 80)
+    
+    try:
+        # 1단계: 샵바이 주문 조회
+        shopby_result = await process_shopby_orders()
+        
+        # 2단계: 코너로지스 업로드
+        cornerlogis_result = await process_cornerlogis_upload()
+        
+        return {
+            "status": "completed",
+            "shopby_result": shopby_result,
+            "cornerlogis_result": cornerlogis_result,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ 전체 워크플로우 실행 실패: {e}")
+        return {
+            "status": "failed",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+async def test_connections():
+    """API 연결 테스트"""
+    print("=" * 80)
+    print("🧪 API 연결 테스트")
+    print("=" * 80)
+    
+    config = load_app_config()
+    results = {
+        "shopby_api": False,
+        "cornerlogis_api": False,
+        "google_sheets": False,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    try:
+        # 샵바이 API 테스트
+        async with ShopbyApiClient(config.shopby) as shopby_client:
+            try:
+                await shopby_client.get_orders_by_date_range(days_back=1)
+                results["shopby_api"] = True
+                print("✅ 샵바이 API 연결 성공")
+            except Exception as e:
+                print(f"❌ 샵바이 API 연결 실패: {e}")
+        
+        # 코너로지스 API 테스트
+        async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
+            try:
+                # 간단한 상품 조회 테스트
+                await cornerlogis_client.get_goods_ids(["TEST"])
+                results["cornerlogis_api"] = True
+                print("✅ 코너로지스 API 연결 성공")
+            except Exception as e:
+                print(f"❌ 코너로지스 API 연결 실패: {e}")
+        
+        # 구글 시트 테스트
+        try:
+            sku_mapping = get_sku_mapping(config)
+            results["google_sheets"] = True
+            print(f"✅ 구글 시트 연결 성공: {len(sku_mapping)}개 매핑")
+        except Exception as e:
+            print(f"❌ 구글 시트 연결 실패: {e}")
+        
+        return results
+        
+    except Exception as e:
+        print(f"❌ 연결 테스트 실패: {e}")
+        results["error"] = str(e)
+        return results
+
+
 if __name__ == "__main__":
     asyncio.run(main())
