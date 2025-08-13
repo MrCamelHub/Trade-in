@@ -169,14 +169,23 @@ class ShopbyApiClient:
         Returns:
             모든 결제완료 주문 목록
         """
+        # Railway 서버가 유럽 시간대일 수 있으므로 명시적으로 UTC+9 강제 적용
+        import os
+        os.environ['TZ'] = 'Asia/Seoul'
+        
         kst = pytz.timezone("Asia/Seoul")
-        end_date = datetime.now(kst)
+        
+        # 현재 UTC 시간을 가져온 후 KST로 변환 (더 명확한 방법)
+        utc_now = datetime.utcnow()
+        end_date = utc_now.replace(tzinfo=pytz.UTC).astimezone(kst)
         start_date = end_date - timedelta(days=days_back)
         
-        print(f"🔍 결제완료 주문 조회 기간: {start_date.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"🕐 현재 KST 시간: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"📅 시작일: {start_date.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"📅 종료일: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"🌍 서버 환경 시간대 강제 설정: Asia/Seoul")
+        print(f"🕐 UTC 현재 시간: {utc_now.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"🇰🇷 KST 현재 시간: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 조회 시작일: {start_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 조회 종료일: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"🔍 결제완료 주문 조회 기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
         
         return await self.get_orders(start_date=start_date, end_date=end_date, order_status="PAY_DONE")
 
