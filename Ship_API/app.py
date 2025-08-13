@@ -158,6 +158,35 @@ def schedule_cornerlogis():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/env')
+def debug_env():
+    """환경변수 디버깅"""
+    config = load_app_config()
+    
+    return jsonify({
+        "shopby": {
+            "base_url": config.shopby.base_url,
+            "system_key": config.shopby.system_key,
+            "auth_token": config.shopby.auth_token,
+            "version": config.shopby.version
+        },
+        "cornerlogis": {
+            "base_url": config.cornerlogis.base_url,
+            "api_key": config.cornerlogis.api_key if config.cornerlogis.api_key else None
+        },
+        "timezone": config.timezone,
+        "data_dir": config.data_dir,
+        "raw_env": {
+            "SHOPBY_API_BASE_URL": os.getenv("SHOPBY_API_BASE_URL"),
+            "SHOPBY_SYSTEM_KEY": os.getenv("SHOPBY_SYSTEM_KEY"),
+            "SHOPBY_AUTH_TOKEN": os.getenv("SHOPBY_AUTH_TOKEN"),
+            "SHOPBY_API_VERSION": os.getenv("SHOPBY_API_VERSION"),
+            "CORNERLOGIS_API_BASE_URL": os.getenv("CORNERLOGIS_API_BASE_URL"),
+            "CORNERLOGIS_API_KEY": os.getenv("CORNERLOGIS_API_KEY"),
+            "TZ": os.getenv("TZ")
+        }
+    })
+
 @app.route('/logs')
 def get_logs():
     """최근 로그 조회"""
