@@ -188,7 +188,7 @@ def get_new_token():
         
         async def request_new_token():
             token_data = {
-                "code": "soV07uJKp2MF",
+                "code": "urezDTa3xw6c",
                 "grant_type": "authorization_code", 
                 "client_secret": "WtecrihxmAz3Lu3uvAnzrw9PN4i1Cocc",
                 "redirect_uri": "https://bonibello.re-hi.co.kr",
