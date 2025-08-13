@@ -173,7 +173,10 @@ class ShopbyApiClient:
         end_date = datetime.now(kst)
         start_date = end_date - timedelta(days=days_back)
         
-        print(f"🔍 결제완료 주문 조회 기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
+        print(f"🔍 결제완료 주문 조회 기간: {start_date.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"🕐 현재 KST 시간: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 시작일: {start_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 종료일: {end_date.strftime('%Y-%m-%d %H:%M:%S')}")
         
         return await self.get_orders(start_date=start_date, end_date=end_date, order_status="PAY_DONE")
 
