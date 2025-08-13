@@ -5,7 +5,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-from .config import CornerlogisApiConfig
+from config import CornerlogisApiConfig
 
 
 class CornerlogisApiClient:
@@ -36,6 +36,62 @@ class CornerlogisApiClient:
         
         return headers
     
+    async def get_goods_ids(
+        self,
+        goods_codes: List[str]
+    ) -> Dict[str, int]:
+        """
+        상품 코드로 실제 goodsId를 조회
+        
+        Args:
+            goods_codes: 상품 코드 리스트
+        
+        Returns:
+            상품 코드 → goodsId 매핑 딕셔너리
+        """
+        if not self.session:
+            raise RuntimeError("ClientSession not initialized. Use async context manager.")
+        
+        url = f"{self.config.base_url}/api/v1/goods/getGoods/getList"
+        headers = self._get_headers()
+        params = {"goodsCodeList": goods_codes}
+        
+        try:
+            async with self.session.get(
+                url, 
+                headers=headers, 
+                params=params
+            ) as response:
+                response.raise_for_status()
+                result = await response.json()
+                
+                # 응답에서 goodsCode → goodsId 매핑 생성
+                goods_mapping = {}
+                if "data" in result and "list" in result["data"]:
+                    for item in result["data"]["list"]:
+                        goods_code = item.get("goodsCode")
+                        goods_id = item.get("goodsId")
+                        if goods_code and goods_id:
+                            goods_mapping[goods_code] = goods_id
+                
+                print(f"상품 조회 성공: {len(goods_mapping)}개 상품 매핑")
+                for code, id in goods_mapping.items():
+                    print(f"  {code} → {id}")
+                
+                return goods_mapping
+                
+        except aiohttp.ClientError as e:
+            print(f"코너로지스 상품 조회 실패: {e}")
+            try:
+                error_text = await response.text()
+                print(f"에러 응답: {error_text}")
+            except:
+                pass
+            raise
+        except json.JSONDecodeError as e:
+            print(f"코너로지스 상품 조회 응답 파싱 실패: {e}")
+            raise
+
     async def create_outbound_order(
         self,
         order_data: List[Dict[str, Any]]
@@ -140,7 +196,7 @@ class CornerlogisApiClient:
             print(f"출고 상태 조회 실패 (ID: {outbound_id}): {e}")
             return None
     
-    def prepare_outbound_data(
+    async def prepare_outbound_data(
         self,
         shopby_order: Dict[str, Any],
         sku_mapping: Dict[str, str] = None
@@ -159,20 +215,24 @@ class CornerlogisApiClient:
         items = shopby_order.get("items", []) or shopby_order.get("orderItems", [])
         outbound_data_list = []
         
+        # 1단계: 모든 상품 코드 수집
+        goods_codes_to_lookup = []
+        items_with_codes = []
+        
         for item in items:
             original_sku = item.get("productCode", "") or item.get("sku", "")
             
-            # 샵바이 productManagementCd 추출 (기본 goodsId로 사용)
+            # 샵바이 productManagementCd 추출
             product_management_cd = (
                 item.get("productManagementCd") or 
                 item.get("product_management_cd") or 
                 item.get("productCode") or 
                 item.get("sku") or 
-                799109  # 최후 기본값
+                "799109"  # 최후 기본값
             )
             
-            # SKU 매핑 적용하여 goodsId 결정
-            goods_id = product_management_cd  # 기본적으로 productManagementCd 사용
+            # SKU 매핑 적용하여 상품 코드 결정
+            goods_code = str(product_management_cd)  # 기본적으로 productManagementCd 사용
             
             if sku_mapping and original_sku in sku_mapping:
                 mapped_value = str(sku_mapping[original_sku]).strip()
@@ -180,10 +240,36 @@ class CornerlogisApiClient:
                 # 경우 1: AAAAAA0000 형식인지 확인 (6자리 대문자 + 4자리 숫자)
                 import re
                 if re.match(r'^[A-Z]{6}\d{4}$', mapped_value):
-                    goods_id = mapped_value  # 경우 1이면 매핑값 사용
+                    goods_code = mapped_value  # 경우 1이면 매핑값 사용
                 else:
                     # 경우 1이 아니면 샵바이 productManagementCd 그대로 사용
-                    goods_id = int(product_management_cd) if str(product_management_cd).isdigit() else product_management_cd
+                    goods_code = str(product_management_cd)
+            
+            goods_codes_to_lookup.append(goods_code)
+            items_with_codes.append((item, goods_code))
+        
+        # 2단계: 코너로지스 API로 상품 코드 → goodsId 변환
+        goods_id_mapping = {}
+        if goods_codes_to_lookup:
+            try:
+                goods_id_mapping = await self.get_goods_ids(goods_codes_to_lookup)
+                print(f"상품 코드 → goodsId 변환 완료: {len(goods_id_mapping)}개")
+            except Exception as e:
+                print(f"상품 코드 → goodsId 변환 실패: {e}")
+                # 변환 실패시 기본 로직으로 fallback
+                for code in goods_codes_to_lookup:
+                    try:
+                        # 숫자인 경우 정수로 변환
+                        goods_id_mapping[code] = int(code) if code.isdigit() else code
+                    except:
+                        goods_id_mapping[code] = code
+        
+        # 3단계: 출고 데이터 생성
+        for item, goods_code in items_with_codes:
+            # 실제 goodsId 사용 (코너로지스에서 조회된 값)
+            goods_id = goods_id_mapping.get(goods_code, goods_code)
+            
+            print(f"상품 처리: {goods_code} → goodsId: {goods_id}")
             
             # 코너로지스 API 스펙에 맞는 데이터 구조 (완전 매핑)
             outbound_item = {
@@ -412,7 +498,7 @@ class CornerlogisApiClient:
 # 사용 예시 및 테스트 함수
 async def test_cornerlogis_api():
     """코너로지스 API 테스트"""
-    from .config import load_app_config
+    from config import load_app_config
     
     config = load_app_config()
     

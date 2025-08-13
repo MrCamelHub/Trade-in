@@ -9,12 +9,12 @@ from typing import List, Dict, Any
 import pytz
 import holidays
 
-from .config import load_app_config, ensure_data_dirs
-from .shopby_api_client import ShopbyApiClient
-from .cornerlogis_api_client import CornerlogisApiClient
-from .data_transformer import ShopbyToCornerlogisTransformer
-from .sku_mapping import get_sku_mapping
-from .google_sheets_logger import GoogleSheetsLogger
+from config import load_app_config, ensure_data_dirs
+from shopby_api_client import ShopbyApiClient
+from cornerlogis_api_client import CornerlogisApiClient
+from data_transformer import ShopbyToCornerlogisTransformer
+from sku_mapping import get_sku_mapping
+from google_sheets_logger import GoogleSheetsLogger
 
 
 def prepare_shopby_order_for_cornerlogis(shopby_order: Dict[str, Any]) -> Dict[str, Any]:
@@ -236,7 +236,7 @@ async def process_cornerlogis_upload() -> Dict[str, Any]:
                     enhanced_order = prepare_shopby_order_for_cornerlogis(shopby_order)
                     
                     # 코너로지스 출고 데이터로 변환
-                    outbound_data_list = cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
+                    outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
                     
                     if not outbound_data_list:
                         error_msg = f"주문 {order_no}: 변환할 상품이 없습니다"
@@ -332,7 +332,7 @@ async def save_shopby_orders(
             json.dump(transformed_orders, f, indent=2, ensure_ascii=False, default=str)
         
         # SKU 매핑도 저장 (1:30에 필요)
-        from .sku_mapping import get_sku_mapping
+        from sku_mapping import get_sku_mapping
         sku_mapping = get_sku_mapping(config)
         sku_file = outputs_dir / f"sku_mapping_{today}.json"
         with open(sku_file, 'w', encoding='utf-8') as f:
@@ -369,7 +369,7 @@ async def load_shopby_orders(config) -> tuple:
                 sku_mapping = json.load(f)
         else:
             # 파일이 없으면 다시 로드
-            from .sku_mapping import get_sku_mapping
+            from sku_mapping import get_sku_mapping
             sku_mapping = get_sku_mapping(config)
         
         print(f"✅ 샵바이 주문 로드: {len(shopby_orders)}개")
@@ -602,7 +602,7 @@ async def test_workflow():
     print(f"  SKU 매핑: {len(sku_mapping)}개 항목")
     
     # 데이터 변환 테스트
-    from .data_transformer import create_sample_data
+    from data_transformer import create_sample_data
     transformer = ShopbyToCornerlogisTransformer(sku_mapping)
     sample_order = create_sample_data()
     transformed = transformer.transform_order(sample_order)

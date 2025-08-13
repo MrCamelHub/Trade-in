@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import pytz
-from .config import ShopbyApiConfig
+from config import ShopbyApiConfig
 
 
 class ShopbyApiClient:
@@ -154,7 +154,7 @@ class ShopbyApiClient:
 # 사용 예시 및 테스트 함수
 async def test_shopby_api():
     """샵바이 API 테스트"""
-    from .config import load_app_config
+    from config import load_app_config
     
     config = load_app_config()
     

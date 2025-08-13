@@ -161,7 +161,7 @@ class GoogleSheetsLogger:
 # 테스트 함수
 def test_sheets_logger():
     """구글 시트 로거 테스트"""
-    from .config import load_app_config
+    from config import load_app_config
     
     config = load_app_config()
     

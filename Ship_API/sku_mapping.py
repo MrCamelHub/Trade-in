@@ -243,7 +243,7 @@ def validate_sku_mapping(sku_mapping: Dict[str, str]) -> Dict[str, any]:
 # 테스트 함수
 def test_sku_mapping():
     """SKU 매핑 기능 테스트"""
-    from .config import load_app_config
+    from config import load_app_config
     
     print("SKU 매핑 테스트 시작...")
     
