@@ -178,6 +178,82 @@ def debug_shopby():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/diag-httpbin')
+def diag_httpbin():
+    """Railway에서 실제 전송되는 헤더/요청을 httpbin으로 에코해서 확인"""
+    try:
+        import asyncio
+        import aiohttp
+        from config import load_app_config
+        from shopby_api_client import ShopbyApiClient
+
+        async def run():
+            config = load_app_config()
+            async with ShopbyApiClient(config.shopby) as client:
+                headers = client._get_headers()
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://httpbin.org/anything", headers=headers) as resp:
+                    text = await resp.text()
+                    try:
+                        data = await resp.json()
+                    except Exception:
+                        data = None
+                    return {
+                        "status": resp.status,
+                        "text": text,
+                        "json": data
+                    }
+
+        result = asyncio.run(run())
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/shopby-raw')
+def shopby_raw():
+    """Shopby 주문 조회를 원시 형태로 호출해 응답 상태/본문을 반환"""
+    try:
+        import asyncio
+        import aiohttp
+        from datetime import datetime, timedelta
+        import pytz
+        from urllib.parse import urlencode, quote
+        from config import load_app_config
+        from shopby_api_client import ShopbyApiClient
+
+        async def run():
+            config = load_app_config()
+            kst = pytz.timezone("Asia/Seoul")
+            end_dt = datetime.now(kst)
+            start_dt = end_dt - timedelta(days=1)
+            params = {
+                "startYmdt": start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "endYmdt": end_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "orderRequestTypes": "PAY_DONE",
+            }
+            async with ShopbyApiClient(config.shopby) as client:
+                headers = client._get_headers()
+            base_url = f"{config.shopby.base_url}/orders"
+            full_url = f"{base_url}?{urlencode(params, quote_via=quote)}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(full_url, headers=headers) as resp:
+                    text = await resp.text()
+                    try:
+                        data = await resp.json()
+                    except Exception:
+                        data = None
+                    return {
+                        "url": full_url,
+                        "status": resp.status,
+                        "text": text,
+                        "json": data
+                    }
+
+        result = asyncio.run(run())
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/get-new-token', methods=['POST'])
 def get_new_token():
     """Railway IP에서 새로운 샵바이 토큰 발급"""
