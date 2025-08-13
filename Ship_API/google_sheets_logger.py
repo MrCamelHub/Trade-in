@@ -30,8 +30,42 @@ class GoogleSheetsLogger:
         scopes = ['https://www.googleapis.com/auth/spreadsheets']
         
         if google_credentials_json:
-            # 환경변수에서 JSON 직접 로드
-            creds_info = json.loads(google_credentials_json)
+            # 환경변수에서 JSON 직접 로드 (Railway 호환: 다양한 포맷 복구 시도)
+            creds_info = None
+            last_error = None
+            raw = google_credentials_json
+            # 1) 직접 로드 시도
+            try:
+                creds_info = json.loads(raw)
+            except Exception as e:
+                last_error = e
+            # 2) 감싸진 따옴표/전후 잡음 제거 후 { ... } 부분만 추출
+            if creds_info is None:
+                try:
+                    start = raw.find('{')
+                    end = raw.rfind('}')
+                    if start != -1 and end != -1 and end > start:
+                        sliced = raw[start:end+1]
+                        creds_info = json.loads(sliced)
+                except Exception as e:
+                    last_error = e
+            # 3) 이스케이프된 개행 복구 후 로드
+            if creds_info is None:
+                try:
+                    normalized = raw.replace('\\n', '\n')
+                    creds_info = json.loads(normalized)
+                except Exception as e:
+                    last_error = e
+            # 4) base64 가능성 (드물지만 지원)
+            if creds_info is None:
+                try:
+                    import base64
+                    decoded = base64.b64decode(raw).decode('utf-8', 'ignore')
+                    creds_info = json.loads(decoded)
+                except Exception as e:
+                    last_error = e
+            if creds_info is None:
+                raise ValueError(f"Google 인증 JSON 파싱 실패: {last_error}")
             creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         elif google_credentials_path and Path(google_credentials_path).exists():
             # 파일에서 인증 정보 로드

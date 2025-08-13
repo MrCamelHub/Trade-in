@@ -117,8 +117,25 @@ class CornerlogisApiClient:
                 headers=headers, 
                 json=order_data
             ) as response:
-                response.raise_for_status()
-                result = await response.json()
+                # 원문 수집
+                resp_text = await response.text()
+                try:
+                    result = json.loads(resp_text)
+                except json.JSONDecodeError:
+                    result = None
+                if response.status >= 400:
+                    print("코너로지스 오류 응답:")
+                    print(resp_text)
+                    print("요청 바디:")
+                    try:
+                        print(json.dumps(order_data, ensure_ascii=False))
+                    except Exception:
+                        print(str(order_data))
+                    response.raise_for_status()
+                if result is None:
+                    print("코너로지스 비JSON 응답:")
+                    print(resp_text)
+                    return None
                 print(f"코너로지스 출고 주문 생성 성공: {result}")
                 return result
                 
