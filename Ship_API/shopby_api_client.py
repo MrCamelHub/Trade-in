@@ -242,6 +242,25 @@ class ShopbyApiClient:
         print(f"🧮 청크 합산 결과: 총 {len(aggregated)}건")
         return aggregated
 
+    async def get_pay_done_orders_adaptive(
+        self,
+        days_back: int = 30,
+        chunk_days: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        우선 단일 범위 조회를 시도하고, 실패(예: 400) 시 청크 방식으로 폴백
+        """
+        try:
+            kst = pytz.timezone("Asia/Seoul")
+            utc_now = datetime.utcnow()
+            end_dt_kst = utc_now.replace(tzinfo=pytz.UTC).astimezone(kst)
+            start_dt_kst = end_dt_kst - timedelta(days=days_back)
+            print(f"🟢 단일 범위 조회 시도: {start_dt_kst} ~ {end_dt_kst}")
+            return await self.get_orders(start_date=start_dt_kst, end_date=end_dt_kst, order_status="PAY_DONE")
+        except Exception as e:
+            print(f"⚠️ 단일 범위 조회 실패, 청크로 폴백: {e}")
+            return await self.get_pay_done_orders_chunked(days_back=days_back, chunk_days=chunk_days)
+
 
 # 사용 예시 및 테스트 함수
 async def test_shopby_api():

@@ -93,10 +93,10 @@ async def process_shopby_orders() -> Dict[str, Any]:
         shopby_orders = []
         
         async with ShopbyApiClient(config.shopby) as shopby_client:
-            # 청크 방식으로 PAY_DONE 주문 조회 (Railway 400 회피)
-            shopby_orders = await shopby_client.get_pay_done_orders_chunked(days_back=30, chunk_days=1)
+            # 우선 단일 범위 조회 시도, 실패 시 자동 청크 폴백
+            shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=30, chunk_days=1)
             result["shopby_orders_count"] = len(shopby_orders)
-            print(f"샵바이 주문 조회 완료(청크): {len(shopby_orders)}개 주문")
+            print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개 주문")
         
         if not shopby_orders:
             print("처리할 주문이 없습니다.")
