@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 import re
+import pytz
 
 # Load environment variables
 load_dotenv()
@@ -110,12 +111,16 @@ def parse_slack_message(message):
                 })
     return data
 
-def append_to_sheet(data):
+def append_to_sheet(data, received_date_str=None):
     service = get_google_sheets_service()
     first_empty_row = find_first_empty_row(service)
     
-    # Prepare the values with the current date (m/d format for Excel date recognition)
-    current_date = datetime.now().strftime('%-m/%-d')  # e.g., "8/5" for August 5th
+    # Prepare the values with the received date in KST (m/d format for Excel date recognition)
+    if not received_date_str:
+        kst = pytz.timezone('Asia/Seoul')
+        current_date = datetime.now(kst).strftime('%-m/%-d')  # e.g., "8/5" for August 5th
+    else:
+        current_date = received_date_str
     values = []
     
     for item in data:
@@ -186,6 +191,24 @@ def slack_webhook():
         print(f"📨 Received event: {event}")  # Debug log
         
         if event.get('type') == 'message':
+            # Determine received date from Slack timestamp (KST)
+            received_date_str = None
+            try:
+                ts_value = event.get('ts')
+                if ts_value is not None:
+                    # 'ts' is a string like "1723567890.1234"
+                    ts_seconds = float(ts_value)
+                else:
+                    event_time = data.get('event_time')  # fallback, int seconds
+                    ts_seconds = float(event_time) if event_time is not None else None
+                if ts_seconds is not None:
+                    kst = pytz.timezone('Asia/Seoul')
+                    received_dt_kst = datetime.fromtimestamp(ts_seconds, tz=pytz.utc).astimezone(kst)
+                    received_date_str = received_dt_kst.strftime('%-m/%-d')
+            except Exception as ts_err:
+                print(f"⚠️ Failed to parse Slack timestamp: {ts_err}")
+                received_date_str = None
+
             # Check for text in event
             message = event.get('text', '')
             
@@ -206,7 +229,7 @@ def slack_webhook():
                 if parsed_data:
                     try:
                         print(f"📊 Adding data to Google Sheets...")
-                        result = append_to_sheet(parsed_data)
+                        result = append_to_sheet(parsed_data, received_date_str=received_date_str)
                         print(f"✅ Sheet update result: {result}")  # Debug log
                         return jsonify({'status': 'success', 'message': 'Data added to Google Sheets'})
                     except Exception as e:
