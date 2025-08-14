@@ -107,7 +107,7 @@ async def process_orders() -> Dict[str, Any]:
                     print(f"주문 처리 중: {order_no} ({i+1}/{len(shopby_orders)})")
                     
                     # 샵바이 주문 데이터를 코너로지스 출고 데이터로 변환
-                    outbound_data_list = cornerlogis_client.prepare_outbound_data(shopby_order, sku_mapping)
+                    outbound_data_list = await cornerlogis_client.prepare_outbound_data(shopby_order, sku_mapping)
                     
                     if not outbound_data_list:
                         error_msg = f"주문 {order_no}: 변환할 상품이 없습니다"
@@ -360,7 +360,7 @@ async def scheduled_run_cornerlogis():
     async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
         for i, order in enumerate(orders):
             try:
-                outbound_list = cornerlogis_client.prepare_outbound_data(order, sku_mapping)
+                outbound_list = await cornerlogis_client.prepare_outbound_data(order, sku_mapping)
                 if not outbound_list:
                     continue
                 await cornerlogis_client.create_outbound_order(outbound_list)
