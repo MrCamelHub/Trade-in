@@ -9,12 +9,12 @@ from typing import List, Dict, Any
 import pytz
 import holidays
 
-from .config import load_app_config, ensure_data_dirs
-from .shopby_api_client import ShopbyApiClient
-from .cornerlogis_api_client import CornerlogisApiClient
-from .data_transformer import ShopbyToCornerlogisTransformer
-from .sku_mapping import get_sku_mapping
-from .google_sheets_logger import GoogleSheetsLogger
+from config import load_app_config, ensure_data_dirs
+from shopby_api_client import ShopbyApiClient
+from cornerlogis_api_client import CornerlogisApiClient
+from data_transformer import ShopbyToCornerlogisTransformer
+from sku_mapping import get_sku_mapping
+from google_sheets_logger import GoogleSheetsLogger
 
 
 async def process_orders() -> Dict[str, Any]:
@@ -427,7 +427,7 @@ async def test_workflow():
     print(f"  SKU 매핑: {len(sku_mapping)}개 항목")
     
     # 데이터 변환 테스트
-    from .data_transformer import create_sample_data
+    from data_transformer import create_sample_data
     transformer = ShopbyToCornerlogisTransformer(sku_mapping)
     sample_order = create_sample_data()
     transformed = transformer.transform_order(sample_order)
