@@ -62,6 +62,17 @@ async def process_orders() -> Dict[str, Any]:
                 import json
                 print(json.dumps(shopby_orders[0], indent=2, ensure_ascii=False, default=str)[:1000] + "...")
 
+        # 샵바이 API 응답에서 실제 주문 배열 추출
+        actual_orders = []
+        if isinstance(shopby_orders, list) and len(shopby_orders) > 0:
+            if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
+                actual_orders = shopby_orders[0]['contents']
+                print(f"실제 주문 수: {len(actual_orders)}개")
+            else:
+                actual_orders = shopby_orders
+        else:
+            actual_orders = shopby_orders
+
         # 2.5. 구글시트 로깅 (상품명, 상품번호)
         try:
             logger = GoogleSheetsLogger(
@@ -70,7 +81,7 @@ async def process_orders() -> Dict[str, Any]:
                 google_credentials_json=config.google_credentials_json,
                 google_credentials_path=str(config.google_credentials_path) if config.google_credentials_path else None,
             )
-            logged = logger.log_from_shopby_orders(shopby_orders)
+            logged = logger.log_from_shopby_orders(actual_orders)
             print(f"구글시트 로깅 완료: {logged}개 상품")
         except Exception as e:
             print(f"구글시트 로깅 실패: {e}")
@@ -83,7 +94,7 @@ async def process_orders() -> Dict[str, Any]:
         
         # 2.5. 저장 (13:30 업로드용)
         try:
-            await save_shopby_orders(config, shopby_orders)
+            await save_shopby_orders(config, actual_orders)
             print("샵바이 주문 임시 저장 완료")
         except Exception as e:
             print(f"샵바이 주문 저장 실패: {e}")
@@ -91,8 +102,9 @@ async def process_orders() -> Dict[str, Any]:
         # 3. 데이터 변환
         print("3. 주문 데이터 변환 중...")
         transformer = ShopbyToCornerlogisTransformer(sku_mapping)
-        transformed_orders = transformer.transform_orders(shopby_orders)
+        transformed_orders = transformer.transform_orders(actual_orders)
         result["transformed_orders_count"] = len(transformed_orders)
+        result["shopby_orders_count"] = len(actual_orders)  # 실제 주문 수로 업데이트
         print(f"데이터 변환 완료: {len(transformed_orders)}개 주문")
         
         if not transformed_orders:
@@ -106,11 +118,11 @@ async def process_orders() -> Dict[str, Any]:
         
         async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
             # 개별 주문 처리
-            for i, shopby_order in enumerate(shopby_orders):
+            for i, shopby_order in enumerate(actual_orders):
                 order_no = shopby_order.get("orderNo", f"ORDER_{i+1}")
                 
                 try:
-                    print(f"주문 처리 중: {order_no} ({i+1}/{len(shopby_orders)})")
+                    print(f"주문 처리 중: {order_no} ({i+1}/{len(actual_orders)})")
                     
                     # 샵바이 주문 데이터를 코너로지스 출고 데이터로 변환
                     outbound_data_list = await cornerlogis_client.prepare_outbound_data(shopby_order, sku_mapping)
@@ -146,7 +158,7 @@ async def process_orders() -> Dict[str, Any]:
                         })
                     
                     # API 호출 간격 조절
-                    if i < len(shopby_orders) - 1:
+                    if i < len(actual_orders) - 1:
                         await asyncio.sleep(1)
                         
                 except Exception as e:

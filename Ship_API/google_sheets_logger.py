@@ -63,24 +63,49 @@ class GoogleSheetsLogger:
         """샵바이 주문 응답에서 상품 정보 추출하여 기록"""
         all_products: List[Dict[str, Any]] = []
         for order in shopby_orders:
-            items = (
-                order.get("items")
-                or order.get("orderItems")
-                or order.get("orderProducts")
-                or []
-            )
-            if not isinstance(items, list):
-                items = [items]
-            for it in items:
-                # 최소 필드만 추출
-                all_products.append(
-                    {
-                        "productName": it.get("productName") or it.get("name") or "",
-                        "productNo": it.get("productNo") or it.get("mallProductNo") or "",
-                    }
+            # 샵바이 API 구조: orderSheetInfo.payProducts에 상품 정보가 있음
+            order_sheet_info = order.get("orderSheetInfo", {})
+            pay_products = order_sheet_info.get("payProducts", [])
+            
+            # 기존 구조도 지원 (하위 호환성)
+            if not pay_products:
+                items = (
+                    order.get("items")
+                    or order.get("orderItems") 
+                    or order.get("orderProducts")
+                    or order.get("deliveryGroups", [])
                 )
+                # deliveryGroups 처리
+                if items and isinstance(items, list) and len(items) > 0:
+                    if "orderProducts" in items[0]:
+                        for delivery_group in items:
+                            for product in delivery_group.get("orderProducts", []):
+                                pay_products.append({
+                                    "productNo": product.get("productNo"),
+                                    "productName": product.get("productName"),
+                                })
+                else:
+                    pay_products = items if isinstance(items, list) else [items] if items else []
+            
+            for product in pay_products:
+                if isinstance(product, dict):
+                    product_name = product.get("productName", "") or product.get("name", "")
+                    product_no = str(product.get("productNo", "") or product.get("mallProductNo", ""))
+                    
+                    if product_name or product_no:
+                        all_products.append({
+                            "productName": product_name,
+                            "productNo": product_no,
+                        })
+        
         if not all_products:
+            print("🔍 추출된 상품이 없습니다. 샵바이 데이터 구조를 확인해주세요.")
             return 0
+        
+        print(f"🔍 추출된 상품: {len(all_products)}개")
+        for i, product in enumerate(all_products[:3]):  # 처음 3개만 표시
+            print(f"  {i+1}. {product['productName']} (상품번호: {product['productNo']})")
+        
         self.log_products(all_products)
         return len(all_products)
 
