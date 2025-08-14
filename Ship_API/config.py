@@ -31,11 +31,19 @@ class MappingSheetConfig:
 
 
 @dataclass
+class LoggingSheetConfig:
+    """구글 시트 로깅 설정 (상품 로그)"""
+    spreadsheet_id: str = "1pXOIiSCXpEOUHQUgl_4FUDltRG9RYq0_cadJX4Cre1o"
+    tab_name: str = "Sheet1"
+
+
+@dataclass
 class AppConfig:
     """전체 앱 설정"""
     shopby: ShopbyApiConfig
     cornerlogis: CornerlogisApiConfig
     mapping: MappingSheetConfig
+    logging: LoggingSheetConfig
     data_dir: Path
     google_credentials_json: Optional[str] = None
     google_credentials_path: Optional[Path] = None
@@ -72,6 +80,12 @@ def load_app_config() -> AppConfig:
         tab_name=os.getenv("MAPPING_TAB_NAME", "📍위탁수거 상품정보")
     )
     
+    # 로깅 시트 설정
+    logging_cfg = LoggingSheetConfig(
+        spreadsheet_id=os.getenv("LOGGING_SPREADSHEET_ID", "1pXOIiSCXpEOUHQUgl_4FUDltRG9RYq0_cadJX4Cre1o"),
+        tab_name=os.getenv("LOGGING_TAB_NAME", "Sheet1")
+    )
+    
     # Google 인증 설정
     google_credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     google_credentials_path_str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_PATH")
@@ -88,6 +102,7 @@ def load_app_config() -> AppConfig:
         shopby=shopby,
         cornerlogis=cornerlogis,
         mapping=mapping,
+        logging=logging_cfg,
         data_dir=data_dir,
         google_credentials_json=google_credentials_json,
         google_credentials_path=google_credentials_path,
