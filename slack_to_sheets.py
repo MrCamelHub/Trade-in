@@ -5,6 +5,7 @@ from googleapiclient.discovery import build
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+import re
 
 # Load environment variables
 load_dotenv()
@@ -49,9 +50,25 @@ def find_first_empty_row(service):
     # If no empty row found, return next row after last data
     return len(values) + 1
 
+def clean_slack_formatting(text):
+    """Remove Slack link markup so field delimiters '|' are not corrupted.
+
+    Examples transformed:
+    - "<tel:1801151302|180 115-1302>" -> "180 115-1302"
+    - "<http://example.com|example>" -> "example"
+    - "<http://example.com>" -> "http://example.com"
+    """
+    # Replace link-with-label first: <something|label> -> label
+    text = re.sub(r"<[^>|]+\|([^>]+)>", r"\1", text)
+    # Then replace bare autolinks: <something> -> something
+    text = re.sub(r"<([^>]+)>", r"\1", text)
+    return text
+
 def parse_slack_message(message):
     # Split the message by newlines and process each line
-    lines = message.strip().split('\n')
+    # Clean Slack's autolink/markup (e.g., <tel:...|...>) before splitting by '|'
+    cleaned_message = clean_slack_formatting(message or "")
+    lines = cleaned_message.strip().split('\n')
     data = []
     
     for line in lines:
