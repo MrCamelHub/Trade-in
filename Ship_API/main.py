@@ -14,6 +14,7 @@ from .shopby_api_client import ShopbyApiClient
 from .cornerlogis_api_client import CornerlogisApiClient
 from .data_transformer import ShopbyToCornerlogisTransformer
 from .sku_mapping import get_sku_mapping
+from .google_sheets_logger import GoogleSheetsLogger
 
 
 async def process_orders() -> Dict[str, Any]:
@@ -54,6 +55,19 @@ async def process_orders() -> Dict[str, Any]:
             shopby_orders = await shopby_client.get_today_orders()
             result["shopby_orders_count"] = len(shopby_orders)
             print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개 주문")
+
+        # 2.5. 구글시트 로깅 (상품명, 상품번호)
+        try:
+            logger = GoogleSheetsLogger(
+                spreadsheet_id=config.logging.spreadsheet_id,
+                tab_name=config.logging.tab_name,
+                google_credentials_json=config.google_credentials_json,
+                google_credentials_path=str(config.google_credentials_path) if config.google_credentials_path else None,
+            )
+            logged = logger.log_from_shopby_orders(shopby_orders)
+            print(f"구글시트 로깅 완료: {logged}개 상품")
+        except Exception as e:
+            print(f"구글시트 로깅 실패: {e}")
         
         if not shopby_orders:
             print("처리할 주문이 없습니다.")
