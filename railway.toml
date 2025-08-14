@@ -10,3 +10,16 @@ name = "bonibello-tradein"
 
 [services.source]
 repo = "https://github.com/MrCamelHub/Trade-in"
+
+# Ship API scheduler service (runs at 13:00 KST on weekdays)
+[[services]]
+name = "ship-scheduler"
+
+[services.schedule]
+# UTC 04:00 = KST 13:00, weekdays only
+cron = "0 4 * * 1-5"
+command = "python -m Ship_API.main schedule"
+
+[services.variables]
+TZ = "Asia/Seoul"
+PYTHONPATH = "."
