@@ -61,6 +61,14 @@ async def process_orders() -> Dict[str, Any]:
                 print("🔍 첫 번째 주문 데이터 구조:")
                 import json
                 print(json.dumps(shopby_orders[0], indent=2, ensure_ascii=False, default=str)[:1000] + "...")
+                
+                # payProducts 상세 구조도 출력
+                if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
+                    first_order = shopby_orders[0]['contents'][0]
+                    pay_products = first_order.get('orderSheetInfo', {}).get('payProducts', [])
+                    if pay_products:
+                        print("🔍 첫 번째 payProduct 구조:")
+                        print(json.dumps(pay_products[0], indent=2, ensure_ascii=False, default=str))
 
         # 샵바이 API 응답에서 실제 주문 배열 추출
         actual_orders = []

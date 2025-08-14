@@ -232,7 +232,27 @@ class CornerlogisApiClient:
             코너로지스 API 형식의 출고 데이터 리스트
         """
         # 주문 상품 처리 - 각 상품별로 별도 출고 요청 생성
-        items = shopby_order.get("items", []) or shopby_order.get("orderItems", [])
+        # 샵바이 API 구조: orderSheetInfo.payProducts에 상품 정보가 있음
+        order_sheet_info = shopby_order.get("orderSheetInfo", {})
+        items = order_sheet_info.get("payProducts", [])
+        
+        # 기존 구조도 지원 (하위 호환성)
+        if not items:
+            items = (
+                shopby_order.get("items", []) or 
+                shopby_order.get("orderItems", []) or 
+                shopby_order.get("orderProducts", [])
+            )
+            # deliveryGroups 처리
+            delivery_groups = shopby_order.get("deliveryGroups", [])
+            if delivery_groups and not items:
+                for delivery_group in delivery_groups:
+                    items.extend(delivery_group.get("orderProducts", []))
+        
+        print(f"🔍 상품 추출 결과: {len(items)}개 상품")
+        if items:
+            print(f"🔍 첫 번째 상품: {items[0]}")
+        
         outbound_data_list = []
         
         # 1단계: 모든 상품 코드 수집

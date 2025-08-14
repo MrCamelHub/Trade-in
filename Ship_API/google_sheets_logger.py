@@ -48,16 +48,28 @@ class GoogleSheetsLogger:
             product_no = p.get("productNo", "") or p.get("mallProductNo", "")
             values.append([ts, product_name, product_no])
         body = {"values": values}
-        # 시트1의 C열부터 기록한다고 했던 요구사항: 여기서는 고정 컬럼이 아닌 단순 append로 처리
-        rng = f"{self.tab_name}!C:E"
-        self.service.spreadsheets().values().append(
-            spreadsheetId=self.spreadsheet_id,
-            range=rng,
-            valueInputOption="RAW",
-            insertDataOption="INSERT_ROWS",
-            body=body,
-        ).execute()
-        return True
+        # 구글시트 범위 설정 - C열부터 E열까지
+        sheet_names_to_try = [self.tab_name, "시트1", "Sheet1"]
+        
+        for sheet_name in sheet_names_to_try:
+            try:
+                rng = f"{sheet_name}!C:E"
+                print(f"🔍 구글시트 범위 시도: {rng}")
+                self.service.spreadsheets().values().append(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=rng,
+                    valueInputOption="RAW",
+                    insertDataOption="INSERT_ROWS",
+                    body=body,
+                ).execute()
+                print(f"✅ 구글시트 기록 성공: {sheet_name}")
+                return True
+            except Exception as e:
+                print(f"❌ 구글시트 기록 실패 ({sheet_name}): {e}")
+                continue
+        
+        print(f"❌ 모든 시트명 시도 실패")
+        return False
 
     def log_from_shopby_orders(self, shopby_orders: List[Dict[str, Any]]) -> int:
         """샵바이 주문 응답에서 상품 정보 추출하여 기록"""
