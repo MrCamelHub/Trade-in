@@ -18,7 +18,19 @@ name = "ship-scheduler"
 [services.schedule]
 # UTC 04:00 = KST 13:00, weekdays only
 cron = "0 4 * * 1-5"
-command = "python -m Ship_API.main schedule"
+command = "python -m Ship_API.main schedule-shopby"
+
+[services.variables]
+TZ = "Asia/Seoul"
+PYTHONPATH = "."
+
+[[services]]
+name = "ship-cornerlogis"
+
+[services.schedule]
+# UTC 04:30 = KST 13:30, weekdays only
+cron = "30 4 * * 1-5"
+command = "python -m Ship_API.main schedule-cornerlogis"
 
 [services.variables]
 TZ = "Asia/Seoul"

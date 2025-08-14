@@ -75,6 +75,13 @@ async def process_orders() -> Dict[str, Any]:
             result["end_time"] = datetime.now().isoformat()
             return result
         
+        # 2.5. 저장 (13:30 업로드용)
+        try:
+            await save_shopby_orders(config, shopby_orders)
+            print("샵바이 주문 임시 저장 완료")
+        except Exception as e:
+            print(f"샵바이 주문 저장 실패: {e}")
+
         # 3. 데이터 변환
         print("3. 주문 데이터 변환 중...")
         transformer = ShopbyToCornerlogisTransformer(sku_mapping)
@@ -204,6 +211,36 @@ async def save_processing_result(
         print(f"결과 저장 실패: {e}")
 
 
+async def save_shopby_orders(config, orders: List[Dict[str, Any]]) -> None:
+    """13:00 조회 결과를 파일로 저장 (13:30 업로드용)"""
+    try:
+        outputs_dir = config.data_dir / "outputs"
+        outputs_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        latest_path = outputs_dir / "shopby_orders_latest.json"
+        ts_path = outputs_dir / f"shopby_orders_{timestamp}.json"
+        import json
+        with open(latest_path, "w", encoding="utf-8") as f:
+            json.dump(orders, f, ensure_ascii=False, indent=2, default=str)
+        with open(ts_path, "w", encoding="utf-8") as f:
+            json.dump(orders, f, ensure_ascii=False, indent=2, default=str)
+    except Exception as e:
+        print(f"샵바이 주문 저장 실패: {e}")
+
+
+def load_shopby_orders(config) -> List[Dict[str, Any]]:
+    """저장된 주문 로드 (없으면 빈 리스트)"""
+    try:
+        latest_path = config.data_dir / "outputs" / "shopby_orders_latest.json"
+        if latest_path.exists():
+            import json
+            with open(latest_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"저장된 주문 로드 실패: {e}")
+    return []
+
+
 def should_run_now_kst() -> bool:
     """
     현재 시간이 실행 조건에 맞는지 확인
@@ -228,6 +265,28 @@ def should_run_now_kst() -> bool:
     return True
 
 
+def should_run_shopby_now_kst() -> bool:
+    kst = pytz.timezone("Asia/Seoul")
+    now = datetime.now(kst)
+    if now.weekday() >= 5:
+        return False
+    kr_holidays = holidays.SouthKorea()
+    if now.date() in kr_holidays:
+        return False
+    return now.hour == 13 and now.minute < 30
+
+
+def should_run_cornerlogis_now_kst() -> bool:
+    kst = pytz.timezone("Asia/Seoul")
+    now = datetime.now(kst)
+    if now.weekday() >= 5:
+        return False
+    kr_holidays = holidays.SouthKorea()
+    if now.date() in kr_holidays:
+        return False
+    return now.hour == 13 and now.minute >= 30
+
+
 async def scheduled_run():
     """스케줄된 실행 (매일 평일 13:00)"""
     print(f"스케줄 체크: {datetime.now()}")
@@ -249,6 +308,71 @@ async def run_once():
     return await process_orders()
 
 
+async def scheduled_run_shopby():
+    print(f"스케줄(13:00) 체크: {datetime.now()}")
+    if not should_run_shopby_now_kst():
+        kst = pytz.timezone("Asia/Seoul")
+        now = datetime.now(kst)
+        return {"status": "skipped", "reason": "not_13_00_kst", "time": now.isoformat()}
+    config = load_app_config()
+    ensure_data_dirs(config.data_dir)
+    # 1) SKU 매핑
+    sku_mapping = get_sku_mapping(config)
+    # 2) 주문 조회
+    async with ShopbyApiClient(config.shopby) as shopby_client:
+        shopby_orders = await shopby_client.get_today_orders()
+    # 3) 구글 시트 로깅
+    try:
+        logger = GoogleSheetsLogger(
+            spreadsheet_id=config.logging.spreadsheet_id,
+            tab_name=config.logging.tab_name,
+            google_credentials_json=config.google_credentials_json,
+            google_credentials_path=str(config.google_credentials_path) if config.google_credentials_path else None,
+        )
+        logger.log_from_shopby_orders(shopby_orders)
+    except Exception as e:
+        print(f"구글시트 로깅 실패: {e}")
+    # 4) 저장
+    await save_shopby_orders(config, shopby_orders)
+    return {"status": "completed", "shopby_orders": len(shopby_orders)}
+
+
+async def scheduled_run_cornerlogis():
+    print(f"스케줄(13:30) 체크: {datetime.now()}")
+    if not should_run_cornerlogis_now_kst():
+        kst = pytz.timezone("Asia/Seoul")
+        now = datetime.now(kst)
+        return {"status": "skipped", "reason": "not_13_30_kst", "time": now.isoformat()}
+    config = load_app_config()
+    ensure_data_dirs(config.data_dir)
+    # 저장된 주문 불러오거나, 없으면 재조회
+    orders = load_shopby_orders(config)
+    if not orders:
+        async with ShopbyApiClient(config.shopby) as shopby_client:
+            orders = await shopby_client.get_today_orders()
+    if not orders:
+        return {"status": "completed", "uploaded": 0, "reason": "no_orders"}
+    # 변환 후 업로드
+    sku_mapping = get_sku_mapping(config)
+    transformer = ShopbyToCornerlogisTransformer(sku_mapping)
+    transformed = transformer.transform_orders(orders)
+    uploaded = 0
+    async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
+        for i, order in enumerate(orders):
+            try:
+                outbound_list = cornerlogis_client.prepare_outbound_data(order, sku_mapping)
+                if not outbound_list:
+                    continue
+                await cornerlogis_client.create_outbound_order(outbound_list)
+                uploaded += 1
+                if i < len(orders) - 1:
+                    await asyncio.sleep(1)
+            except Exception as e:
+                print(f"업로드 실패: {e}")
+                continue
+    return {"status": "completed", "uploaded": uploaded}
+
+
 # CLI 인터페이스
 async def main():
     """메인 함수"""
@@ -263,12 +387,20 @@ async def main():
         elif command == "run":
             # 즉시 실행 모드
             result = await run_once()
+        elif command == "schedule-shopby":
+            result = await scheduled_run_shopby()
+        elif command == "schedule-cornerlogis":
+            result = await scheduled_run_cornerlogis()
+        elif command == "run-shopby":
+            result = await scheduled_run_shopby()
+        elif command == "run-cornerlogis":
+            result = await scheduled_run_cornerlogis()
         elif command == "test":
             # 테스트 모드 (API 호출 없이 검증만)
             result = await test_workflow()
         else:
             print(f"알 수 없는 명령: {command}")
-            print("사용법: python -m Ship_API.main [schedule|run|test]")
+            print("사용법: python -m Ship_API.main [schedule|run|schedule-shopby|schedule-cornerlogis|run-shopby|run-cornerlogis|test]")
             return
     else:
         # 기본값: 스케줄 모드
