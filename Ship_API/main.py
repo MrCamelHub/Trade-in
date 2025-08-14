@@ -55,6 +55,12 @@ async def process_orders() -> Dict[str, Any]:
             shopby_orders = await shopby_client.get_today_orders()
             result["shopby_orders_count"] = len(shopby_orders)
             print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개 주문")
+            
+            # 디버깅: 첫 번째 주문 데이터 구조 출력
+            if shopby_orders:
+                print("🔍 첫 번째 주문 데이터 구조:")
+                import json
+                print(json.dumps(shopby_orders[0], indent=2, ensure_ascii=False, default=str)[:1000] + "...")
 
         # 2.5. 구글시트 로깅 (상품명, 상품번호)
         try:
