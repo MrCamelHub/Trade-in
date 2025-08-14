@@ -38,3 +38,12 @@ startCommand = "python -m Ship_API.main run-shopby && python -m Ship_API.main ru
 [services.variables]
 TZ = "Asia/Seoul"
 PYTHONPATH = "."
+
+# Always-on runner that starts Ship_API directly (does not depend on root main.py)
+[[services]]
+name = "ship-api-runner"
+startCommand = "python -m Ship_API.main run-full"
+
+[services.variables]
+TZ = "Asia/Seoul"
+PYTHONPATH = "."
