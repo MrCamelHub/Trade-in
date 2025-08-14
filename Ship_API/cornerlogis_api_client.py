@@ -124,11 +124,14 @@ class CornerlogisApiClient:
                 except json.JSONDecodeError:
                     result = None
                 if response.status >= 400:
-                    print("코너로지스 오류 응답:")
-                    print(resp_text)
-                    print("요청 바디:")
+                    print("🔴 코너로지스 API 에러 응답:")
+                    print(f"Status: {response.status}")
+                    print(f"원본 응답: {resp_text}")
+                    if result:
+                        print(f"파싱된 에러: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                    print("🔴 요청 바디:")
                     try:
-                        print(json.dumps(order_data, ensure_ascii=False))
+                        print(json.dumps(order_data, ensure_ascii=False, indent=2))
                     except Exception:
                         print(str(order_data))
                     response.raise_for_status()
