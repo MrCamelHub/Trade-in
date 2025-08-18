@@ -60,10 +60,12 @@ def load_app_config() -> AppConfig:
         version=os.getenv("SHOPBY_API_VERSION", "1.1")
     )
     
-    # 코너로지스 API 설정 (임시 하드코딩)
+    # 코너로지스 API 설정
+    cornerlogis_base_url = os.getenv("CORNERLOGIS_API_BASE_URL", "https://devapi.cornerlogis.com")
+    
     cornerlogis = CornerlogisApiConfig(
         base_url=cornerlogis_base_url,
-        api_key=os.getenv("CORNERLOGIS_API_KEY")
+        api_key=os.getenv("CORNERLOGIS_API_KEY", "DSAGJOPcj2CSANIVOAF1FO")
     )
     
     # 매핑 시트 설정
