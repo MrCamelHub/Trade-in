@@ -104,36 +104,37 @@ async def process_shopby_orders() -> Dict[str, Any]:
             result["end_time"] = datetime.now().isoformat()
             return result
         
-        # 2.5. 구글 시트에 상품 정보 기록
-        print("2.5. 구글 시트에 상품 정보 기록 중...")
-        try:
-            sheets_logger = GoogleSheetsLogger(
-                spreadsheet_id="1pXOIiSCXpEOUHQUgl_4FUDltRG9RYq0_cadJX4Cre1o",
-                google_credentials_json=config.google_credentials_json,
-                google_credentials_path=str(config.google_credentials_path) if config.google_credentials_path else None
-            )
-            
-            # 샵바이 API 응답 구조 처리 (로깅용)
-            if isinstance(shopby_orders, list) and len(shopby_orders) > 0:
-                if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
-                    actual_orders_for_logging = shopby_orders[0]['contents']
-                else:
-                    actual_orders_for_logging = shopby_orders
-            else:
-                actual_orders_for_logging = shopby_orders
-            
-            # 오늘 날짜로 기록
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            sheets_success = sheets_logger.log_shopby_orders(actual_orders_for_logging, today_str)
-            
-            if sheets_success:
-                print("✅ 구글 시트 기록 완료")
-            else:
-                print("⚠️ 구글 시트 기록 실패 (처리는 계속)")
-                
-        except Exception as e:
-            print(f"⚠️ 구글 시트 기록 오류: {e} (처리는 계속)")
-            result["errors"].append(f"구글 시트 기록 오류: {str(e)}")
+        # 2.5. 구글 시트에 상품 정보 기록 (임시 비활성화)
+        print("2.5. 구글 시트에 상품 정보 기록 중... (임시 스킵)")
+        print("⚠️ Google 인증 문제로 인해 시트 로깅을 임시로 스킵합니다")
+        # try:
+        #     sheets_logger = GoogleSheetsLogger(
+        #         spreadsheet_id="1pXOIiSCXpEOUHQUgl_4FUDltRG9RYq0_cadJX4Cre1o",
+        #         google_credentials_json=config.google_credentials_json,
+        #         google_credentials_path=str(config.google_credentials_path) if config.google_credentials_path else None
+        #     )
+        #     
+        #     # 샵바이 API 응답 구조 처리 (로깅용)
+        #     if isinstance(shopby_orders, list) and len(shopby_orders) > 0:
+        #         if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
+        #             actual_orders_for_logging = shopby_orders[0]['contents']
+        #         else:
+        #             actual_orders_for_logging = shopby_orders
+        #     else:
+        #         actual_orders_for_logging = shopby_orders
+        #     
+        #     # 오늘 날짜로 기록
+        #     today_str = datetime.now().strftime("%Y-%m-%d")
+        #     sheets_success = sheets_logger.log_shopby_orders(actual_orders_for_logging, today_str)
+        #     
+        #     if sheets_success:
+        #         print("✅ 구글 시트 기록 완료")
+        #     else:
+        #         print("⚠️ 구글 시트 기록 실패 (처리는 계속)")
+        #         
+        # except Exception as e:
+        #     print(f"⚠️ 구글 시트 기록 오류: {e} (처리는 계속)")
+        #     result["errors"].append(f"구글 시트 기록 오류: {str(e)}")
         
         # 3. 데이터 변환
         print("3. 주문 데이터 변환 중...")
