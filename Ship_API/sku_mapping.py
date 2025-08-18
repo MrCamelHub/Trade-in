@@ -37,8 +37,56 @@ def load_sku_mapping_from_sheets(
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
         
         if google_credentials_json:
-            # 환경변수에서 JSON 직접 로드
-            creds_info = json.loads(google_credentials_json)
+            # 환경변수에서 JSON 직접 로드 (강화된 파싱 로직)
+            creds_info = None
+            last_error = None
+            raw = google_credentials_json
+            
+            # 1) 직접 로드 시도
+            try:
+                creds_info = json.loads(raw)
+                print("  📋 Google 인증: 직접 파싱 성공")
+            except Exception as e:
+                last_error = e
+                print(f"  📋 Google 인증: 직접 파싱 실패 - {e}")
+            
+            # 2) 감싸진 따옴표/전후 잡음 제거 후 { ... } 부분만 추출
+            if creds_info is None:
+                try:
+                    start = raw.find('{')
+                    end = raw.rfind('}')
+                    if start != -1 and end != -1 and end > start:
+                        sliced = raw[start:end+1]
+                        creds_info = json.loads(sliced)
+                        print("  📋 Google 인증: 슬라이싱 파싱 성공")
+                except Exception as e:
+                    last_error = e
+                    print(f"  📋 Google 인증: 슬라이싱 파싱 실패 - {e}")
+            
+            # 3) 이스케이프된 개행 복구 후 로드
+            if creds_info is None:
+                try:
+                    normalized = raw.replace('\\n', '\n')
+                    creds_info = json.loads(normalized)
+                    print("  📋 Google 인증: 정규화 파싱 성공")
+                except Exception as e:
+                    last_error = e
+                    print(f"  📋 Google 인증: 정규화 파싱 실패 - {e}")
+            
+            # 4) base64 가능성 (드물지만 지원)
+            if creds_info is None:
+                try:
+                    import base64
+                    decoded = base64.b64decode(raw).decode('utf-8', 'ignore')
+                    creds_info = json.loads(decoded)
+                    print("  📋 Google 인증: base64 파싱 성공")
+                except Exception as e:
+                    last_error = e
+                    print(f"  📋 Google 인증: base64 파싱 실패 - {e}")
+            
+            if creds_info is None:
+                raise ValueError(f"Google 인증 JSON 파싱 실패: {last_error}")
+            
             creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         elif google_credentials_path and Path(google_credentials_path).exists():
             # 파일에서 인증 정보 로드
@@ -52,6 +100,7 @@ def load_sku_mapping_from_sheets(
         
         # 시트 데이터 조회 - 충분히 큰 범위로 설정 (최대 5000행)
         range_name = f"{tab_name}!{cornerlogis_sku_col}1:{shopby_sku_col}5000"
+        print(f"📊 구글 시트 조회: {range_name}")
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
             range=range_name,
@@ -59,6 +108,7 @@ def load_sku_mapping_from_sheets(
         ).execute()
         
         values = result.get('values', [])
+        print(f"📋 조회된 행 수: {len(values)}개")
         
         # SKU 매핑 딕셔너리 생성
         # 사용자 요청: col_10(J열) = shopby_sku, col_9(I열) = cornerlogis_goodsId
@@ -83,8 +133,20 @@ def load_sku_mapping_from_sheets(
             # 둘 다 값이 있을 때만 매핑에 추가
             if shopby_sku and cornerlogis_goods_id:
                 sku_mapping[shopby_sku] = cornerlogis_goods_id
+                # 중요한 SKU 매핑 발견시 로깅
+                if shopby_sku in ['50003453', '50001206', '50001111']:
+                    print(f"  📋 매핑 발견: {shopby_sku} → {cornerlogis_goods_id}")
         
         print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
+        
+        # 중요한 SKU들 확인
+        important_skus = ['50003453', '50001206', '50001111']
+        for sku in important_skus:
+            if sku in sku_mapping:
+                print(f"  ✅ {sku} → {sku_mapping[sku]}")
+            else:
+                print(f"  ❌ {sku} 매핑 누락!")
+        
         return sku_mapping
         
     except Exception as e:
