@@ -333,8 +333,15 @@ class InvoiceTracker:
                 
                 print(f"   📊 샵바이 주문 상태: {order_status}")
                 
-                # 5. 배송완료 처리 필요성 판단
-                if original_delivery_no and order_status == "DELIVERY_ING":
+                # 5. 네이버페이 주문 확인 (상태 변경 불가)
+                pay_type = shopby_details.get("payType", "")
+                is_naver_pay = "NAVER" in str(pay_type).upper()
+                
+                print(f"   💳 결제방법: {pay_type}")
+                print(f"   🔍 네이버페이 주문: {is_naver_pay}")
+                
+                # 6. 배송완료 처리 필요성 판단
+                if original_delivery_no and order_status == "DELIVERY_ING" and not is_naver_pay:
                     print(f"   🎯 배송완료 처리 필요: 현재 배송중 → 배송완료로 변경 예정")
                     completion_info = {
                         "shopby_order_no": shopby_order_no,
@@ -349,6 +356,9 @@ class InvoiceTracker:
                     print(f"   ✅ 배송완료 처리 대상으로 추가됨")
                 elif original_delivery_no and order_status == "DELIVERY_DONE":
                     print(f"   ✨ 이미 배송완료 처리됨: {order_status}")
+                    skip_count += 1
+                elif original_delivery_no and order_status == "DELIVERY_ING" and is_naver_pay:
+                    print(f"   ⏸️ 네이버페이 주문: 샵바이 정책상 배송완료 처리 불가")
                     skip_count += 1
                 elif original_delivery_no and order_status not in ["DELIVERY_ING", "DELIVERY_DONE"]:
                     print(f"   ⏸️ 배송완료 처리 불가: {order_status} (DELIVERY_ING 상태 아님)")
