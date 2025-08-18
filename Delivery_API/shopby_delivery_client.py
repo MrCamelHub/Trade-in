@@ -191,10 +191,25 @@ class ShopbyDeliveryClient:
                 response.raise_for_status()
                 result = await response.json()
                 
-                print(f"✅ 주문 상태 변경 성공:")
-                print(f"  응답: {json.dumps(result, indent=2, ensure_ascii=False)}")
+                print(f"📋 API 응답:")
+                print(f"  {json.dumps(result, indent=2, ensure_ascii=False)}")
                 
-                return True
+                # 실제 API 응답에서 성공/실패 확인
+                success_count = result.get("successCount", 0)
+                fail_count = result.get("failCount", 0)
+                failures = result.get("failures", [])
+                
+                if success_count > 0 and fail_count == 0:
+                    print(f"✅ 주문 상태 변경 성공: {success_count}건 성공")
+                    return True
+                else:
+                    print(f"❌ 주문 상태 변경 실패: {fail_count}건 실패")
+                    for failure in failures:
+                        error_code = failure.get("errorCode", "N/A")
+                        error_message = failure.get("errorMessage", "N/A")
+                        print(f"  오류 코드: {error_code}")
+                        print(f"  오류 메시지: {error_message}")
+                    return False
                 
         except aiohttp.ClientError as e:
             print(f"❌ 주문 상태 변경 실패: {e}")
