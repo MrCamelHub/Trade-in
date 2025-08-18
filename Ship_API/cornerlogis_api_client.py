@@ -27,7 +27,7 @@ class CornerlogisApiClient:
         """API 요청 헤더 생성"""
         headers = {
             "Content-Type": "application/json;charset=UTF-8",
-            "Accept": "application/json",
+            "Accept": "application/json;charset=UTF-8",
             "Authorization": "DSAGJOPcj2CSANIVOAF1FO"
         }
         
