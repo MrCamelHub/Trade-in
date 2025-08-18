@@ -1,0 +1,174 @@
+[
+  {
+    "orderNo": "TEST_ORDER_001",
+    "orderDate": "2025-08-18 15:47:41",
+    "orderRequestTypes": "PAY_DONE",
+    "orderStatus": "PAY_DONE",
+    "customerName": "테스트고객1",
+    "customerPhone": "010-1111-2222",
+    "customerEmail": "test1@bonibello.com",
+    "buyerName": "테스트고객1",
+    "buyerPhone": "010-1111-2222",
+    "buyerEmail": "test1@bonibello.com",
+    "recipientName": "받는사람1",
+    "recipientPhone": "010-3333-4444",
+    "deliveryZipCode": "06234",
+    "deliveryAddress1": "서울시 강남구 테헤란로 123",
+    "deliveryAddress2": "ABC빌딩 101호",
+    "deliveryMemo": "부재시 경비실에 맡겨주세요",
+    "memo": "테스트 주문 1번",
+    "shippingType": "일반배송",
+    "shippingMethod": "STANDARD",
+    "deliveryGroups": [
+      {
+        "receiverName": "받는사람1",
+        "receiverContact1": "010-3333-4444",
+        "receiverAddress": "서울시 강남구 테헤란로 123",
+        "receiverDetailAddress": "ABC빌딩 101호",
+        "receiverZipCd": "06234",
+        "deliveryMemo": "부재시 경비실에 맡겨주세요",
+        "orderProducts": [
+          {
+            "productManagementCd": "50000878",
+            "productName": "테스트상품 A",
+            "orderProductOptions": [
+              {
+                "orderCnt": 1,
+                "adjustedAmt": 25000,
+                "salePrice": 30000,
+                "optionName": "기본옵션"
+              }
+            ]
+          },
+          {
+            "productManagementCd": "50000879",
+            "productName": "테스트상품 B",
+            "orderProductOptions": [
+              {
+                "orderCnt": 1,
+                "adjustedAmt": 15000,
+                "salePrice": 18000,
+                "optionName": "기본옵션"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "productCode": "50000878",
+        "productManagementCd": "50000878",
+        "productName": "테스트상품 A",
+        "optionName": "기본옵션",
+        "quantity": 1,
+        "unitPrice": 25000,
+        "totalPrice": 25000,
+        "adjustedAmt": 25000,
+        "salePrice": 30000,
+        "weight": 0.5
+      },
+      {
+        "productCode": "50000879",
+        "productManagementCd": "50000879",
+        "productName": "테스트상품 B",
+        "optionName": "기본옵션",
+        "quantity": 1,
+        "unitPrice": 15000,
+        "totalPrice": 15000,
+        "adjustedAmt": 15000,
+        "salePrice": 18000,
+        "weight": 0.3
+      }
+    ],
+    "totalAmount": 40000,
+    "createdAt": "2025-08-18T15:47:41.966313",
+    "created_at": "2025-08-18T15:47:41.966313"
+  },
+  {
+    "orderNo": "TEST_ORDER_002",
+    "orderDate": "2025-08-18 15:17:41",
+    "orderRequestTypes": "PAY_DONE",
+    "orderStatus": "PAY_DONE",
+    "customerName": "테스트고객2",
+    "customerPhone": "010-5555-6666",
+    "customerEmail": "test2@bonibello.com",
+    "buyerName": "테스트고객2",
+    "buyerPhone": "010-5555-6666",
+    "buyerEmail": "test2@bonibello.com",
+    "recipientName": "받는사람2",
+    "recipientPhone": "010-7777-8888",
+    "deliveryZipCode": "13579",
+    "deliveryAddress1": "경기도 성남시 분당구 판교로 100",
+    "deliveryAddress2": "XYZ타워 20층",
+    "deliveryMemo": "문 앞에 놓아주세요",
+    "memo": "테스트 주문 2번",
+    "shippingType": "일반배송",
+    "shippingMethod": "STANDARD",
+    "deliveryGroups": [
+      {
+        "receiverName": "받는사람2",
+        "receiverContact1": "010-7777-8888",
+        "receiverAddress": "경기도 성남시 분당구 판교로 100",
+        "receiverDetailAddress": "XYZ타워 20층",
+        "receiverZipCd": "13579",
+        "deliveryMemo": "문 앞에 놓아주세요",
+        "orderProducts": [
+          {
+            "productManagementCd": "142",
+            "productName": "테스트상품 C",
+            "orderProductOptions": [
+              {
+                "orderCnt": 1,
+                "adjustedAmt": 12000,
+                "salePrice": 15000,
+                "optionName": "화이트"
+              }
+            ]
+          },
+          {
+            "productManagementCd": "140",
+            "productName": "테스트상품 D",
+            "orderProductOptions": [
+              {
+                "orderCnt": 1,
+                "adjustedAmt": 35000,
+                "salePrice": 40000,
+                "optionName": "블랙/L"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "productCode": "142",
+        "productManagementCd": "142",
+        "productName": "테스트상품 C",
+        "optionName": "화이트",
+        "quantity": 1,
+        "unitPrice": 12000,
+        "totalPrice": 12000,
+        "adjustedAmt": 12000,
+        "salePrice": 15000,
+        "weight": 0.2
+      },
+      {
+        "productCode": "140",
+        "productManagementCd": "140",
+        "productName": "테스트상품 D",
+        "optionName": "블랙/L",
+        "quantity": 1,
+        "unitPrice": 35000,
+        "totalPrice": 35000,
+        "adjustedAmt": 35000,
+        "salePrice": 40000,
+        "weight": 0.8
+      }
+    ],
+    "totalAmount": 47000,
+    "createdAt": "2025-08-18T15:17:41.966340",
+    "created_at": "2025-08-18T15:17:41.966340"
+  }
+]

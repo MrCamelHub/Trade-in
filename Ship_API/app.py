@@ -24,6 +24,7 @@ def home():
             "/run-shopby": "Manual run Shopby order fetch",
             "/run-cornerlogis": "Manual run Cornerlogis upload",
             "/run-full": "Manual run full workflow",
+            "/run-full-test": "Test full workflow with dummy data",
             "/test": "Test workflow",
             "/status": "Service status",
             "/schedule": "Check schedule condition"
@@ -108,6 +109,20 @@ def run_full():
     try:
         from main import run_full_workflow
         result = asyncio.run(run_full_workflow())
+        return jsonify({
+            "status": "success",
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/run-full-test', methods=['POST'])
+def run_full_test():
+    """테스트 데이터로 전체 워크플로우 실행"""
+    try:
+        from main import run_full_workflow_test
+        result = asyncio.run(run_full_workflow_test())
         return jsonify({
             "status": "success",
             "result": result,

@@ -664,6 +664,151 @@ async def run_full_workflow():
         }
 
 
+async def run_full_workflow_test():
+    """테스트 데이터로 전체 워크플로우 실행"""
+    print("=" * 80)
+    print("🧪 테스트 워크플로우 실행 (더미 데이터)")
+    print("=" * 80)
+    
+    config = load_app_config()
+    ensure_data_dirs(config.data_dir)
+    
+    result = {
+        "start_time": datetime.now().isoformat(),
+        "status": "started",
+        "test_orders_count": 0,
+        "cornerlogis_success_count": 0,
+        "cornerlogis_failure_count": 0,
+        "errors": [],
+        "processed_orders": []
+    }
+    
+    try:
+        print("=== 테스트 데이터로 코너로지스 업로드 테스트 ===")
+        
+        # 1. 테스트 주문 데이터 로드
+        print("1. 테스트 주문 데이터 로드 중...")
+        from test_data_generator import create_test_orders_list
+        
+        test_orders_response = create_test_orders_list()
+        if test_orders_response and len(test_orders_response) > 0:
+            test_orders = test_orders_response[0]['contents']
+        else:
+            test_orders = []
+        
+        result["test_orders_count"] = len(test_orders)
+        print(f"테스트 주문 로드 완료: {len(test_orders)}개 주문")
+        
+        if not test_orders:
+            print("테스트할 주문 데이터가 없습니다.")
+            result["status"] = "completed"
+            result["end_time"] = datetime.now().isoformat()
+            return result
+        
+        # 주문 상세 출력
+        for i, order in enumerate(test_orders, 1):
+            print(f"  주문 {i}: {order['orderNo']}")
+            for item in order['items']:
+                print(f"    - 상품코드: {item['productManagementCd']}, 상품명: {item['productName']}, 수량: {item['quantity']}")
+        
+        # 2. SKU 매핑 로드
+        print("2. SKU 매핑 로드 중...")
+        sku_mapping = get_sku_mapping(config)
+        print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
+        
+        # 3. 코너로지스 API로 전송
+        print("3. 코너로지스 API로 테스트 주문 전송 중...")
+        
+        async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
+            # 개별 주문 처리
+            for i, shopby_order in enumerate(test_orders):
+                order_no = shopby_order.get("orderNo", f"TEST_ORDER_{i+1}")
+                
+                try:
+                    print(f"주문 처리 중: {order_no} ({i+1}/{len(test_orders)})")
+                    
+                    # 샵바이 주문 데이터를 올바른 형식으로 변환
+                    enhanced_order = prepare_shopby_order_for_cornerlogis(shopby_order)
+                    
+                    # 코너로지스 출고 데이터로 변환
+                    outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
+                    
+                    if not outbound_data_list:
+                        error_msg = f"주문 {order_no}: 변환할 상품이 없습니다"
+                        print(error_msg)
+                        result["errors"].append(error_msg)
+                        result["cornerlogis_failure_count"] += 1
+                        continue
+                    
+                    print(f"  → 변환된 상품 수: {len(outbound_data_list)}")
+                    for outbound_data in outbound_data_list:
+                        print(f"    - 상품코드: {outbound_data.get('goodsCode', 'N/A')}, goodsId: {outbound_data.get('goodsId', 'N/A')}")
+                    
+                    # 코너로지스 API 호출 (배열로 전송)
+                    cornerlogis_result = await cornerlogis_client.create_outbound_order(outbound_data_list)
+                    
+                    if cornerlogis_result:
+                        print(f"주문 {order_no} 처리 성공 ({len(outbound_data_list)}개 상품)")
+                        result["cornerlogis_success_count"] += 1
+                        result["processed_orders"].append({
+                            "orderNo": order_no,
+                            "status": "success",
+                            "items_count": len(outbound_data_list),
+                            "cornerlogis_result": cornerlogis_result,
+                            "test_product_codes": [item['productManagementCd'] for item in enhanced_order.get('items', [])]
+                        })
+                    else:
+                        error_msg = f"주문 {order_no} 코너로지스 API 호출 실패"
+                        print(error_msg)
+                        result["errors"].append(error_msg)
+                        result["cornerlogis_failure_count"] += 1
+                        result["processed_orders"].append({
+                            "orderNo": order_no,
+                            "status": "failed",
+                            "error": "API 호출 실패",
+                            "test_product_codes": [item['productManagementCd'] for item in enhanced_order.get('items', [])]
+                        })
+                    
+                    # API 호출 간격 조절
+                    if i < len(test_orders) - 1:
+                        await asyncio.sleep(1)
+                        
+                except Exception as e:
+                    error_msg = f"주문 {order_no} 처리 중 오류: {str(e)}"
+                    print(error_msg)
+                    result["errors"].append(error_msg)
+                    result["cornerlogis_failure_count"] += 1
+                    result["processed_orders"].append({
+                        "orderNo": order_no,
+                        "status": "error",
+                        "error": str(e),
+                        "test_product_codes": [item['productManagementCd'] for item in shopby_order.get('items', [])]
+                    })
+        
+        result["status"] = "completed"
+        result["end_time"] = datetime.now().isoformat()
+        
+        print("=== 테스트 워크플로우 완료 ===")
+        print(f"테스트 주문 수: {result['test_orders_count']}")
+        print(f"코너로지스 전송 성공: {result['cornerlogis_success_count']}")
+        print(f"코너로지스 전송 실패: {result['cornerlogis_failure_count']}")
+        
+        if result["errors"]:
+            print(f"오류 수: {len(result['errors'])}")
+            for error in result["errors"][:3]:  # 최대 3개만 출력
+                print(f"  - {error}")
+        
+        return result
+        
+    except Exception as e:
+        error_msg = f"테스트 워크플로우 중 치명적 오류: {str(e)}"
+        print(error_msg)
+        result["status"] = "failed"
+        result["errors"].append(error_msg)
+        result["end_time"] = datetime.now().isoformat()
+        return result
+
+
 async def test_connections():
     """API 연결 테스트"""
     print("=" * 80)
