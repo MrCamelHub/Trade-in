@@ -1,50 +1,12 @@
-# Ship_API 서비스 전용 설정
 [build]
 builder = "nixpacks"
-buildCommand = "cd Ship_API && pip install -r requirements.txt"
 
 [deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 300
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
-startCommand = "cd Ship_API && python app.py"
+startCommand = "cd Delivery_API && python app.py"
+restartPolicyType = "always"
 
 [env]
-TZ = "Asia/Seoul"
-PYTHONPATH = "./Ship_API"
+PORT = "5000"
+PYTHONPATH = "/app/Delivery_API"
 
-# 웹 서비스 - Flask 앱
-[[services]]
-name = "ship-api-web"
-
-[services.variables]
-TZ = "Asia/Seoul"
-PYTHONPATH = "./Ship_API"
-PORT = "8000"
-
-# 샵바이 스케줄 서비스
-[[services]]
-name = "ship-shopby-scheduler"
-
-[services.schedule]
-# 매일 평일 13:00 (Asia/Seoul) - 샵바이 주문 조회
-cron = "0 4 * * 1-5"  # UTC 04:00 = KST 13:00
-command = "cd Ship_API && python -m main schedule-shopby"
-
-[services.variables]
-TZ = "Asia/Seoul"
-PYTHONPATH = "./Ship_API"
-
-# 코너로지스 스케줄 서비스
-[[services]]
-name = "ship-cornerlogis-scheduler"
-
-[services.schedule]
-# 매일 평일 13:30 (Asia/Seoul) - 코너로지스 업로드
-cron = "30 4 * * 1-5"  # UTC 04:30 = KST 13:30
-command = "cd Ship_API && python -m main schedule-cornerlogis"
-
-[services.variables]
-TZ = "Asia/Seoul"
-PYTHONPATH = "./Ship_API"
+# Railway에서 Delivery_API 폴더를 메인 앱으로 실행
