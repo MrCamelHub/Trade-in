@@ -377,6 +377,86 @@ def debug_env():
         }
     })
 
+@app.route('/test-sku-mapping')
+def test_sku_mapping():
+    """특정 SKU의 매핑과 goodsId 조회 테스트"""
+    try:
+        from config import load_app_config
+        from sku_mapping import get_sku_mapping
+        from cornerlogis_api_client import CornerlogisApiClient
+        import asyncio
+        
+        config = load_app_config()
+        
+        result = {
+            "test_sku": "50003453",
+            "sku_mapping_step": {},
+            "goods_id_step": {},
+            "errors": []
+        }
+        
+        # 1단계: SKU 매핑 로드
+        print("=== 1단계: SKU 매핑 로드 ===")
+        try:
+            sku_mapping = get_sku_mapping(config)
+            result["sku_mapping_step"] = {
+                "status": "success",
+                "total_mappings": len(sku_mapping),
+                "test_sku_found": "50003453" in sku_mapping,
+                "test_sku_value": sku_mapping.get("50003453", "NOT_FOUND")
+            }
+            print(f"SKU 매핑 로드 성공: {len(sku_mapping)}개")
+            print(f"50003453 매핑: {sku_mapping.get('50003453', 'NOT_FOUND')}")
+        except Exception as e:
+            result["sku_mapping_step"] = {
+                "status": "error",
+                "error": str(e)
+            }
+            result["errors"].append(f"SKU 매핑 로드 실패: {str(e)}")
+            return jsonify(result)
+        
+        # 2단계: goodsId 조회
+        print("=== 2단계: goodsId 조회 ===")
+        try:
+            if "50003453" in sku_mapping:
+                mapped_code = sku_mapping["50003453"]
+                print(f"매핑된 코드로 goodsId 조회: {mapped_code}")
+                
+                async def test_goods_id():
+                    async with CornerlogisApiClient(config.cornerlogis) as client:
+                        goods_ids = await client.get_goods_ids([mapped_code])
+                        return goods_ids
+                
+                goods_id_result = asyncio.run(test_goods_id())
+                
+                result["goods_id_step"] = {
+                    "status": "success",
+                    "mapped_code": mapped_code,
+                    "goods_id_found": mapped_code in goods_id_result,
+                    "goods_id": goods_id_result.get(mapped_code, "NOT_FOUND"),
+                    "all_results": goods_id_result
+                }
+                print(f"goodsId 조회 결과: {goods_id_result}")
+            else:
+                result["goods_id_step"] = {
+                    "status": "skipped",
+                    "reason": "SKU 매핑에서 50003453을 찾을 수 없음"
+                }
+        except Exception as e:
+            result["goods_id_step"] = {
+                "status": "error",
+                "error": str(e)
+            }
+            result["errors"].append(f"goodsId 조회 실패: {str(e)}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "test_sku": "50003453"
+        }), 500
+
 @app.route('/logs')
 def get_logs():
     """최근 로그 조회"""
