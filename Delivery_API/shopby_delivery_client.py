@@ -18,7 +18,7 @@ class ShopbyDeliveryClient:
                  base_url: str = "https://server-api.e-ncp.com",
                  system_key: str = "b1hLbVFoS1lUeUZIM0QrZTNuNklUQT09",
                  auth_token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwYXJ0bmVyTm8iOjEyNzk1OSwiYWRtaW5ObyI6MjE5NjI0LCJhY2Nlc3NpYmxlSXBzIjpbXSwidXNhZ2UiOiJTRVJWRVIiLCJhZG1pbklkIjoiam9zZXBoIiwiaXNzIjoiTkhOIENvbW1lcmNlIiwiYXBwTm8iOjE0ODksIm1hbGxObyI6Nzg1MjIsInNvbHV0aW9uVHlwZSI6IlNIT1BCWSIsImV4cCI6NDkwODY2ODU0MSwic2hvcE5vIjoxMDAzNzY1LCJpYXQiOjE3NTUwNjg1NDF9.-aTwbWRNYrCDm-tNCyd-LzUxmKuv766QtQWeuLvoTtI",
-                 version: str = "1.0"):
+                 version: str = "1.1"):
         self.base_url = base_url
         self.system_key = system_key
         self.auth_token = auth_token
@@ -33,10 +33,11 @@ class ShopbyDeliveryClient:
         if self.session:
             await self.session.close()
     
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self, version: str = None) -> Dict[str, str]:
         """API 요청 헤더 생성"""
+        api_version = version or self.version
         return {
-            "Version": self.version,
+            "Version": api_version,
             "Content-Type": "application/json",
             "systemKey": self.system_key,
             "mallKey": self.system_key,  # 외부 API 연동키
@@ -98,9 +99,9 @@ class ShopbyDeliveryClient:
                 "pageSize": 100  # 충분히 큰 페이지 크기
             }
             
-            encoded_params = urlencode(params, quote_via=quote)
-            url = f"{self.base_url}/orders?{encoded_params}"
-            headers = self._get_headers()
+                    encoded_params = urlencode(params, quote_via=quote)
+        url = f"{self.base_url}/orders?{encoded_params}"
+        headers = self._get_headers(version="1.1")  # 주문 조회는 1.1
             
             async with self.session.get(url, headers=headers) as response:
                 response.raise_for_status()
@@ -164,7 +165,7 @@ class ShopbyDeliveryClient:
             raise RuntimeError("ClientSession not initialized. Use async context manager.")
         
         url = f"{self.base_url}/orders/change-status/by-shipping-no"
-        headers = self._get_headers()
+        headers = self._get_headers(version="1.0")  # 상태 변경은 1.0
         
         payload = {
             "changeStatusList": [
