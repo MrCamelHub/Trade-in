@@ -526,15 +526,35 @@ def test_goods_id_conversion():
             async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
                 outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
             
+            # 모든 주문에 대해 출고 데이터 생성
+            all_outbound_data = []
+            order_details = []
+            
+            for i, order in enumerate(actual_orders):
+                enhanced_order = prepare_shopby_order_for_cornerlogis(order)
+                async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
+                    outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
+                
+                order_info = {
+                    "order_index": i + 1,
+                    "order_no": order.get("orderNo", f"ORDER_{i+1}"),
+                    "items_count": len(enhanced_order.get("items", [])),
+                    "outbound_data_count": len(outbound_data_list),
+                    "outbound_data": outbound_data_list,
+                    "enhanced_order_items": enhanced_order.get("items", [])
+                }
+                order_details.append(order_info)
+                all_outbound_data.extend(outbound_data_list)
+            
             return {
                 "shopby_orders_count": len(actual_orders),
                 "sku_mapping_count": len(sku_mapping),
-                "first_order_no": first_order.get("orderNo", "N/A"),
-                "outbound_data_count": len(outbound_data_list),
-                "outbound_sample": outbound_data_list[:1] if outbound_data_list else [],
-                "enhanced_order_sample": {
-                    "orderNo": enhanced_order.get("orderNo"),
-                    "items_count": len(enhanced_order.get("items", []))
+                "total_outbound_data_count": len(all_outbound_data),
+                "order_details": order_details,
+                "summary": {
+                    "total_orders": len(actual_orders),
+                    "total_items": sum(order["items_count"] for order in order_details),
+                    "total_outbound_items": sum(order["outbound_data_count"] for order in order_details)
                 }
             }
         
