@@ -36,51 +36,101 @@ class InvoiceTracker:
             업데이트가 필요한 주문 목록
         """
         print("🔍 송장번호 업데이트가 필요한 주문 조회 시작...")
+        print("=" * 60)
         
         # 1. 코너로지스에서 송장번호가 있는 주문들 조회
+        print("📡 1단계: 코너로지스에서 송장번호가 있는 주문들 조회")
         cornerlogis_orders = await self.cornerlogis_client.get_orders_with_new_invoices()
+        print(f"   ✅ 코너로지스에서 {len(cornerlogis_orders)}건의 배송완료 주문 발견")
         
         update_candidates = []
+        skip_count = 0
+        no_delivery_no_count = 0
         
-        for order in cornerlogis_orders:
+        for i, order in enumerate(cornerlogis_orders, 1):
+            print(f"\n📦 [{i}/{len(cornerlogis_orders)}] 주문 분석 중...")
+            
             # 2. 샵바이 주문번호 추출
             shopby_order_no = self.cornerlogis_client.extract_shopby_order_no(
                 order.get("companyOrderId", "")
             )
+            print(f"   🔍 코너로지스 주문ID: {order.get('companyOrderId', 'N/A')}")
+            print(f"   🔍 추출된 샵바이 주문번호: {shopby_order_no}")
+            print(f"   📋 송장번호: {order.get('invoiceNo', 'N/A')}")
             
             # 3. 샵바이에서 주문 상세 조회 (originalDeliveryNo 확인)
+            print(f"   📞 샵바이 주문 상세 조회 중...")
             shopby_details = await self.shopby_client.get_order_details(shopby_order_no)
             
             if shopby_details:
                 original_delivery_no = shopby_details.get("originalDeliveryNo")
+                print(f"   ✅ 샵바이 주문 조회 성공")
+                print(f"   🚚 샵바이 배송번호(originalDeliveryNo): {original_delivery_no}")
                 
-                # 4. originalDeliveryNo가 있으면 업데이트 대상
-                if original_delivery_no:
-                    update_info = {
-                        "shopby_order_no": shopby_order_no,
-                        "original_delivery_no": original_delivery_no,
-                        "invoice_no": order.get("invoiceNo"),
-                        "cornerlogis_order": order,
-                        "shopby_order": shopby_details,
-                        "pickup_complete_at": order.get("pickupCompleteAt"),
-                        "arrival_at": order.get("arrivalAt"),
-                        "status": order.get("status")
-                    }
-                    update_candidates.append(update_info)
+                # 4. 송장번호 상태 확인
+                delivery_groups = shopby_details.get("deliveryGroups", [])
+                current_invoice = None
+                if delivery_groups:
+                    current_invoice = delivery_groups[0].get("invoiceNo", "")
                     
-                    print(f"📦 업데이트 대상 발견:")
-                    print(f"  주문번호: {shopby_order_no}")
-                    print(f"  배송번호: {original_delivery_no}")
-                    print(f"  송장번호: {order.get('invoiceNo')}")
+                print(f"   📋 샵바이 현재 송장번호: {current_invoice if current_invoice else '없음'}")
+                print(f"   📋 코너로지스 송장번호: {order.get('invoiceNo', 'N/A')}")
+                
+                # 5. 업데이트 필요성 판단
+                if original_delivery_no:
+                    if current_invoice and current_invoice == order.get('invoiceNo'):
+                        print(f"   ✨ 이미 업데이트 완료: 송장번호가 일치함 ({current_invoice})")
+                        skip_count += 1
+                    elif current_invoice and current_invoice != order.get('invoiceNo'):
+                        print(f"   ⚠️ 송장번호 불일치: 샵바이({current_invoice}) vs 코너로지스({order.get('invoiceNo')})")
+                        print(f"   🔄 업데이트 필요: 코너로지스 송장번호로 갱신 예정")
+                        update_info = {
+                            "shopby_order_no": shopby_order_no,
+                            "original_delivery_no": original_delivery_no,
+                            "invoice_no": order.get("invoiceNo"),
+                            "cornerlogis_order": order,
+                            "shopby_order": shopby_details,
+                            "pickup_complete_at": order.get("pickupCompleteAt"),
+                            "arrival_at": order.get("arrivalAt"),
+                            "status": order.get("status")
+                        }
+                        update_candidates.append(update_info)
+                        print(f"   ✅ 업데이트 대상으로 추가됨")
+                    else:
+                        print(f"   🆕 신규 송장번호 등록: 샵바이에 송장번호 없음")
+                        print(f"   🔄 업데이트 필요: 코너로지스 송장번호 등록 예정")
+                        update_info = {
+                            "shopby_order_no": shopby_order_no,
+                            "original_delivery_no": original_delivery_no,
+                            "invoice_no": order.get("invoiceNo"),
+                            "cornerlogis_order": order,
+                            "shopby_order": shopby_details,
+                            "pickup_complete_at": order.get("pickupCompleteAt"),
+                            "arrival_at": order.get("arrivalAt"),
+                            "status": order.get("status")
+                        }
+                        update_candidates.append(update_info)
+                        print(f"   ✅ 업데이트 대상으로 추가됨")
                 else:
-                    print(f"⚠️ originalDeliveryNo 없음: {shopby_order_no}")
+                    print(f"   ❌ 배송번호(originalDeliveryNo) 없음: 샵바이에서 배송 처리가 안된 상태")
+                    print(f"   ⏸️ 스킵: 배송 처리 후 재시도 필요")
+                    no_delivery_no_count += 1
             else:
-                print(f"❌ 샵바이 주문 조회 실패: {shopby_order_no}")
+                print(f"   ❌ 샵바이 주문 조회 실패: {shopby_order_no}")
+                print(f"   ⏸️ 스킵: API 오류 또는 주문번호 불일치")
             
             # API 호출 간격 조절
             await asyncio.sleep(0.5)
         
-        print(f"\n📊 업데이트 대상 요약: {len(update_candidates)}건")
+        print(f"\n" + "=" * 60)
+        print(f"📊 최종 분석 결과 요약:")
+        print(f"   🔍 분석한 총 주문 수: {len(cornerlogis_orders)}건")
+        print(f"   ✅ 업데이트 대상: {len(update_candidates)}건")
+        print(f"   ✨ 이미 완료된 주문: {skip_count}건 (송장번호 일치)")
+        print(f"   ❌ 배송번호 없는 주문: {no_delivery_no_count}건 (샵바이 배송 처리 대기)")
+        print(f"   ⏸️ 기타 스킵: {len(cornerlogis_orders) - len(update_candidates) - skip_count - no_delivery_no_count}건")
+        print("=" * 60)
+        
         return update_candidates
     
     async def update_order_status(
@@ -104,10 +154,12 @@ class InvoiceTracker:
         invoice_no = update_info["invoice_no"]
         order_no = update_info["shopby_order_no"]
         
-        print(f"🚚 주문 상태 업데이트 시작:")
-        print(f"  주문번호: {order_no}")
-        print(f"  배송번호: {shipping_no}")
-        print(f"  송장번호: {invoice_no}")
+        print(f"🚚 주문 상태 업데이트 실행:")
+        print(f"   주문번호: {order_no}")
+        print(f"   배송번호: {shipping_no}")
+        print(f"   송장번호: {invoice_no}")
+        print(f"   택배사: {delivery_company_type}")
+        print(f"   상태: {order_status_type}")
         
         success = await self.shopby_client.change_order_status_by_shipping_no(
             shipping_no=shipping_no,
@@ -138,8 +190,11 @@ class InvoiceTracker:
         Returns:
             업데이트 결과 요약
         """
-        print(f"📋 일괄 주문 상태 업데이트 시작 (dry_run={dry_run})...")
-        print(f"대상 주문 수: {len(update_list)}")
+        print(f"\n🔄 일괄 주문 상태 업데이트 실행")
+        print("=" * 60)
+        print(f"   🎯 모드: {'시뮬레이션 (DRY RUN)' if dry_run else '실제 업데이트'}")
+        print(f"   📋 대상 주문 수: {len(update_list)}건")
+        print("=" * 60)
         
         success_count = 0
         failure_count = 0
@@ -148,15 +203,17 @@ class InvoiceTracker:
         for i, update_info in enumerate(update_list, 1):
             order_no = update_info["shopby_order_no"]
             invoice_no = update_info["invoice_no"]
+            original_delivery_no = update_info["original_delivery_no"]
             
-            print(f"\n[{i}/{len(update_list)}] 처리 중: {order_no}")
+            print(f"   📦 주문번호: {order_no}")
+            print(f"   🚚 배송번호: {original_delivery_no}")
+            print(f"   📋 송장번호: {invoice_no}")
             
             if dry_run:
-                print(f"🔍 DRY RUN: 실제 업데이트하지 않음")
-                print(f"  배송번호: {update_info['original_delivery_no']}")
-                print(f"  송장번호: {invoice_no}")
+                print(f"   🔍 DRY RUN: 시뮬레이션 모드 - 실제 업데이트하지 않음")
                 success = True  # 시뮬레이션에서는 성공으로 처리
             else:
+                print(f"   🚀 실제 업데이트 실행 중...")
                 success = await self.update_order_status(update_info)
                 # API 호출 간격 조절
                 await asyncio.sleep(1.0)
@@ -172,8 +229,10 @@ class InvoiceTracker:
             
             if success:
                 success_count += 1
+                print(f"   ✅ 처리 완료: 성공")
             else:
                 failure_count += 1
+                print(f"   ❌ 처리 실패: 오류 발생")
         
         summary = {
             "total_processed": len(update_list),
@@ -184,11 +243,13 @@ class InvoiceTracker:
             "timestamp": datetime.now().isoformat()
         }
         
-        print(f"\n📊 일괄 업데이트 완료:")
-        print(f"  처리 총 건수: {summary['total_processed']}")
-        print(f"  성공: {summary['success_count']}")
-        print(f"  실패: {summary['failure_count']}")
-        print(f"  DRY RUN: {summary['dry_run']}")
+        print(f"\n" + "=" * 60)
+        print(f"📊 일괄 업데이트 최종 결과:")
+        print(f"   📋 처리 총 건수: {summary['total_processed']}건")
+        print(f"   ✅ 성공: {summary['success_count']}건")
+        print(f"   ❌ 실패: {summary['failure_count']}건")
+        print(f"   🔍 모드: {'시뮬레이션 (DRY RUN)' if summary['dry_run'] else '실제 업데이트'}")
+        print("=" * 60)
         
         return summary
     
