@@ -83,13 +83,8 @@ async def process_shopby_orders() -> Dict[str, Any]:
     try:
         print("=== 샵바이 API 주문 처리 시작 ===")
         
-        # 1. SKU 매핑 로드
-        print("1. SKU 매핑 로드 중...")
-        sku_mapping = get_sku_mapping(config)
-        print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
-        
-        # 2. 샵바이에서 주문 조회
-        print("2. 샵바이 API에서 주문 조회 중...")
+        # 1. 샵바이에서 주문 조회 (먼저 실행)
+        print("1. 샵바이 API에서 주문 조회 중...")
         shopby_orders = []
         
         async with ShopbyApiClient(config.shopby) as shopby_client:
@@ -103,6 +98,11 @@ async def process_shopby_orders() -> Dict[str, Any]:
             result["status"] = "completed"
             result["end_time"] = datetime.now().isoformat()
             return result
+        
+        # 2. SKU 매핑 로드 (주문이 있을 때만 실행)
+        print("2. SKU 매핑 로드 중...")
+        sku_mapping = get_sku_mapping(config)
+        print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
         
         # 2.5. 구글 시트에 상품 정보 기록 (임시 비활성화)
         print("2.5. 구글 시트에 상품 정보 기록 중... (임시 스킵)")
