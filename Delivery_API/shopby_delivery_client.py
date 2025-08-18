@@ -113,18 +113,21 @@ class ShopbyDeliveryClient:
                 
                 for order in orders:
                     if order.get("orderNo") == order_no:
-                        # deliveryGroups에서 deliveryNo 추출
-                        original_delivery_no = None
-                        delivery_groups = order.get("deliveryGroups", [])
-                        if delivery_groups:
-                            original_delivery_no = delivery_groups[0].get("deliveryNo")
+                        # 최상위 originalDeliveryNo 먼저 확인 (실제 originShippingNo와 동일)
+                        original_delivery_no = order.get("originalDeliveryNo")
+                        
+                        # 없으면 deliveryGroups에서 deliveryNo 사용
+                        if not original_delivery_no:
+                            delivery_groups = order.get("deliveryGroups", [])
+                            if delivery_groups:
+                                original_delivery_no = delivery_groups[0].get("deliveryNo")
                         
                         print(f"✅ 주문 조회 성공: {order_no}")
                         print(f"  배송번호(deliveryNo): {original_delivery_no}")
                         print(f"  주문상태: {order.get('orderStatusType', 'N/A')}")
                         print(f"  결제상태: {order.get('paymentStatusType', 'N/A')}")
                         
-                        # originalDeliveryNo 필드도 추가해서 호환성 유지
+                        # originalDeliveryNo 필드 업데이트
                         order["originalDeliveryNo"] = original_delivery_no
                         
                         return order
@@ -170,7 +173,7 @@ class ShopbyDeliveryClient:
         payload = {
             "changeStatusList": [
                 {
-                    "shippingNo": str(shipping_no),  # string 타입으로 변환
+                    "shippingNo": int(shipping_no),  # number 타입으로 변환 (API 문서 예시와 일치)
                     "deliveryCompanyType": delivery_company_type,
                     "invoiceNo": invoice_no
                 }
