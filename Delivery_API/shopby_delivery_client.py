@@ -18,7 +18,7 @@ class ShopbyDeliveryClient:
                  base_url: str = "https://server-api.e-ncp.com",
                  system_key: str = "b1hLbVFoS1lUeUZIM0QrZTNuNklUQT09",
                  auth_token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwYXJ0bmVyTm8iOjEyNzk1OSwiYWRtaW5ObyI6MjE5NjI0LCJhY2Nlc3NpYmxlSXBzIjpbXSwidXNhZ2UiOiJTRVJWRVIiLCJhZG1pbklkIjoiam9zZXBoIiwiaXNzIjoiTkhOIENvbW1lcmNlIiwiYXBwTm8iOjE0ODksIm1hbGxObyI6Nzg1MjIsInNvbHV0aW9uVHlwZSI6IlNIT1BCWSIsImV4cCI6NDkwODY2ODU0MSwic2hvcE5vIjoxMDAzNzY1LCJpYXQiOjE3NTUwNjg1NDF9.-aTwbWRNYrCDm-tNCyd-LzUxmKuv766QtQWeuLvoTtI",
-                 version: str = "1.1"):
+                 version: str = "1.0"):
         self.base_url = base_url
         self.system_key = system_key
         self.auth_token = auth_token
@@ -39,6 +39,7 @@ class ShopbyDeliveryClient:
             "Version": self.version,
             "Content-Type": "application/json",
             "systemKey": self.system_key,
+            "mallKey": self.system_key,  # 외부 API 연동키
             "Authorization": f"Bearer {self.auth_token}"
         }
     
@@ -166,9 +167,13 @@ class ShopbyDeliveryClient:
         headers = self._get_headers()
         
         payload = {
-            "shippingNo": shipping_no,
-            "deliveryCompanyType": delivery_company_type,
-            "invoiceNo": invoice_no,
+            "changeStatusList": [
+                {
+                    "shippingNo": shipping_no,  # 문자열 유지
+                    "deliveryCompanyType": delivery_company_type,
+                    "invoiceNo": invoice_no
+                }
+            ],
             "orderStatusType": order_status_type
         }
         
@@ -178,6 +183,7 @@ class ShopbyDeliveryClient:
         print(f"  송장번호: {invoice_no}")
         print(f"  택배사: {delivery_company_type}")
         print(f"  변경 상태: {order_status_type}")
+        print(f"  요청 페이로드: {json.dumps(payload, indent=2, ensure_ascii=False)}")
         
         try:
             async with self.session.put(url, headers=headers, json=payload) as response:
