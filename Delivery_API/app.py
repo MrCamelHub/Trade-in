@@ -22,6 +22,8 @@ def home():
             "/health": "Health check",
             "/status": "Service status",
             "/invoice/input": "송장 입력 처리",
+            "/invoice/sync": "송장번호 동기화 (코너로지스 → 샵바이)",
+            "/invoice/check": "송장번호 업데이트 대상 조회",
             "/shipping/process": "발송 처리",
             "/shipping/complete": "발송 완료 처리",
             "/test": "Test workflow"
@@ -53,6 +55,50 @@ def input_invoice():
         return jsonify({
             "status": "success",
             "message": "송장 입력 처리 완료",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/invoice/sync', methods=['POST'])
+def sync_invoice():
+    """송장번호 동기화 (코너로지스 → 샵바이)"""
+    try:
+        data = request.get_json() or {}
+        dry_run = data.get("dry_run", True)  # 기본값은 시뮬레이션
+        
+        from invoice_tracker import InvoiceTracker
+        
+        async def run_sync():
+            async with InvoiceTracker() as tracker:
+                return await tracker.run_full_sync(dry_run=dry_run)
+        
+        result = asyncio.run(run_sync())
+        
+        return jsonify({
+            "status": "success",
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/invoice/check', methods=['GET'])
+def check_invoice():
+    """송장번호 업데이트 대상 조회"""
+    try:
+        from invoice_tracker import InvoiceTracker
+        
+        async def check_candidates():
+            async with InvoiceTracker() as tracker:
+                return await tracker.get_orders_needing_update()
+        
+        candidates = asyncio.run(check_candidates())
+        
+        return jsonify({
+            "status": "success",
+            "candidates_count": len(candidates),
+            "candidates": candidates[:10],  # 최대 10건만 표시
             "timestamp": datetime.now().isoformat()
         })
     except Exception as e:
