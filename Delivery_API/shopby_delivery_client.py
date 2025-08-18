@@ -45,6 +45,7 @@ class ShopbyDeliveryClient:
     async def get_order_details(self, order_no: str) -> Optional[Dict[str, Any]]:
         """
         특정 주문의 상세 정보 조회 (originalDeliveryNo 포함)
+        주문 목록에서 해당 주문을 찾아서 반환
         
         Args:
             order_no: 주문번호
@@ -55,28 +56,83 @@ class ShopbyDeliveryClient:
         if not self.session:
             raise RuntimeError("ClientSession not initialized. Use async context manager.")
         
-        url = f"{self.base_url}/orders/{order_no}"
-        headers = self._get_headers()
-        
-        print(f"🔍 샵바이 주문 상세 조회:")
-        print(f"  URL: {url}")
+        print(f"🔍 샵바이 주문 상세 조회 (목록에서 검색):")
         print(f"  주문번호: {order_no}")
         
         try:
+            # 주문번호에서 날짜 추출 (예: 202508141241584834 -> 2025-08-14)
+            from datetime import datetime, timedelta
+            import pytz
+            from urllib.parse import urlencode, quote
+            
+            # 주문번호 앞 8자리에서 날짜 추출
+            if len(order_no) >= 8:
+                order_date_str = order_no[:8]  # 20250814
+                try:
+                    order_date = datetime.strptime(order_date_str, "%Y%m%d")
+                    kst = pytz.timezone("Asia/Seoul")
+                    
+                    # 해당 날짜 하루 범위로 검색
+                    start_date = kst.localize(order_date.replace(hour=0, minute=0, second=0))
+                    end_date = kst.localize(order_date.replace(hour=23, minute=59, second=59))
+                    
+                except ValueError:
+                    # 날짜 파싱 실패시 최근 30일 검색
+                    kst = pytz.timezone("Asia/Seoul")
+                    end_date = datetime.now(kst)
+                    start_date = end_date - timedelta(days=30)
+            else:
+                # 주문번호 형식이 예상과 다를 때 최근 30일 검색
+                kst = pytz.timezone("Asia/Seoul")
+                end_date = datetime.now(kst)
+                start_date = end_date - timedelta(days=30)
+            
+            print(f"  검색 범위: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
+            
+            # 주문 목록에서 검색
+            params = {
+                "startYmdt": start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "endYmdt": end_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "pageNumber": 1,
+                "pageSize": 100  # 충분히 큰 페이지 크기
+            }
+            
+            encoded_params = urlencode(params, quote_via=quote)
+            url = f"{self.base_url}/orders?{encoded_params}"
+            headers = self._get_headers()
+            
             async with self.session.get(url, headers=headers) as response:
-                if response.status == 404:
-                    print(f"❌ 주문을 찾을 수 없음: {order_no}")
-                    return None
                 response.raise_for_status()
                 data = await response.json()
                 
-                # originalDeliveryNo 확인
-                original_delivery_no = data.get("originalDeliveryNo")
-                print(f"✅ 주문 조회 성공: {order_no}")
-                print(f"  배송번호(originalDeliveryNo): {original_delivery_no}")
+                # 주문 목록에서 해당 주문 찾기
+                orders = data.get("contents", []) or data.get("orders", [])
+                print(f"  조회된 주문 수: {len(orders)}건")
                 
-                return data
+                for order in orders:
+                    if order.get("orderNo") == order_no:
+                        # deliveryGroups에서 deliveryNo 추출
+                        original_delivery_no = None
+                        delivery_groups = order.get("deliveryGroups", [])
+                        if delivery_groups:
+                            original_delivery_no = delivery_groups[0].get("deliveryNo")
+                        
+                        print(f"✅ 주문 조회 성공: {order_no}")
+                        print(f"  배송번호(deliveryNo): {original_delivery_no}")
+                        print(f"  주문상태: {order.get('orderStatusType', 'N/A')}")
+                        print(f"  결제상태: {order.get('paymentStatusType', 'N/A')}")
+                        
+                        # originalDeliveryNo 필드도 추가해서 호환성 유지
+                        order["originalDeliveryNo"] = original_delivery_no
+                        
+                        return order
                 
+                print(f"❌ 주문을 찾을 수 없음: {order_no}")
+                return None
+                
+        except aiohttp.ClientResponseError as e:
+            print(f"❌ HTTP 오류: {e.status} - {e.message}")
+            return None
         except aiohttp.ClientError as e:
             print(f"❌ 주문 상세 조회 실패 (주문번호: {order_no}): {e}")
             return None
