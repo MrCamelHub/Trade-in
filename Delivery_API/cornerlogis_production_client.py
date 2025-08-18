@@ -84,12 +84,35 @@ class CornerlogisProductionClient:
     async def get_orders_with_new_invoices(self) -> List[Dict[str, Any]]:
         """
         새로 송장번호가 생긴 주문들 조회
+        PROGRESSING_SHIPMENTS(출고 진행 중)와 COMPLETED_SHIPMENTS(출고 완료) 상태에서 조회
         (delivery.code가 null이 아닌 주문들)
         
         Returns:
             송장번호가 있는 주문 목록
         """
-        all_orders = await self.get_orders_with_invoices()
+        print("📡 코너로지스에서 송장번호가 있는 주문들 조회...")
+        
+        # 출고 진행 중과 출고 완료 상태 모두 조회
+        progressing_orders = await self.get_orders_with_invoices("PROGRESSING_SHIPMENTS")
+        completed_orders = await self.get_orders_with_invoices("COMPLETED_SHIPMENTS")
+        
+        print(f"   📦 출고 진행 중(PROGRESSING_SHIPMENTS): {len(progressing_orders)}건")
+        print(f"   📦 출고 완료(COMPLETED_SHIPMENTS): {len(completed_orders)}건")
+        
+        # 두 목록 합치기 (중복 제거)
+        all_orders = progressing_orders + completed_orders
+        
+        # 중복 제거 (companyOrderId 기준)
+        seen_orders = set()
+        unique_orders = []
+        for order in all_orders:
+            company_order_id = order.get('companyOrderId', '')
+            if company_order_id not in seen_orders:
+                seen_orders.add(company_order_id)
+                unique_orders.append(order)
+        
+        print(f"   📋 중복 제거 후 총: {len(unique_orders)}건")
+        all_orders = unique_orders
         
         # delivery.code가 있는 주문들만 필터링
         orders_with_invoices = []

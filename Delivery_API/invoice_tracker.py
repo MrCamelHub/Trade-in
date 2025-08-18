@@ -67,17 +67,32 @@ class InvoiceTracker:
                 print(f"   ✅ 샵바이 주문 조회 성공")
                 print(f"   🚚 샵바이 배송번호(originalDeliveryNo): {original_delivery_no}")
                 
-                # 4. 송장번호 상태 확인
+                # 4. 샵바이 주문 상태 및 송장번호 확인
                 delivery_groups = shopby_details.get("deliveryGroups", [])
                 current_invoice = None
+                order_status = "알 수 없음"
+                
                 if delivery_groups:
                     current_invoice = delivery_groups[0].get("invoiceNo", "")
+                    # deliveryGroups[0].orderProducts[0].orderProductOptions[0].orderStatusType에서 상태 확인
+                    order_products = delivery_groups[0].get("orderProducts", [])
+                    if order_products:
+                        options = order_products[0].get("orderProductOptions", [])
+                        if options:
+                            order_status = options[0].get("orderStatusType", "알 수 없음")
                     
                 print(f"   📋 샵바이 현재 송장번호: {current_invoice if current_invoice else '없음'}")
                 print(f"   📋 코너로지스 송장번호: {order.get('invoiceNo', 'N/A')}")
+                print(f"   📊 샵바이 주문 상태: {order_status}")
                 
-                # 5. 업데이트 필요성 판단
-                if original_delivery_no:
+                # 5. 업데이트 가능 상태 확인
+                updatable_statuses = ["PAY_DONE", "DELIVERY_PREPARE"]
+                is_updatable_status = order_status in updatable_statuses
+                
+                print(f"   🎯 업데이트 가능 상태: {is_updatable_status} ({order_status})")
+                
+                # 6. 업데이트 필요성 판단
+                if original_delivery_no and is_updatable_status:
                     if current_invoice and current_invoice == order.get('invoiceNo'):
                         print(f"   ✨ 이미 업데이트 완료: 송장번호가 일치함 ({current_invoice})")
                         skip_count += 1
@@ -111,6 +126,10 @@ class InvoiceTracker:
                         }
                         update_candidates.append(update_info)
                         print(f"   ✅ 업데이트 대상으로 추가됨")
+                elif original_delivery_no and not is_updatable_status:
+                    print(f"   ⏸️ 업데이트 불가 상태: {order_status} (PAY_DONE/DELIVERY_PREPARE 아님)")
+                    print(f"   ⏸️ 스킵: 이미 배송 중이거나 완료된 주문")
+                    skip_count += 1
                 else:
                     print(f"   ❌ 배송번호(originalDeliveryNo) 없음: 샵바이에서 배송 처리가 안된 상태")
                     print(f"   ⏸️ 스킵: 배송 처리 후 재시도 필요")
@@ -125,8 +144,8 @@ class InvoiceTracker:
         print(f"\n" + "=" * 60)
         print(f"📊 최종 분석 결과 요약:")
         print(f"   🔍 분석한 총 주문 수: {len(cornerlogis_orders)}건")
-        print(f"   ✅ 업데이트 대상: {len(update_candidates)}건")
-        print(f"   ✨ 이미 완료된 주문: {skip_count}건 (송장번호 일치)")
+        print(f"   ✅ 업데이트 대상: {len(update_candidates)}건 (PAY_DONE/DELIVERY_PREPARE 상태)")
+        print(f"   ✨ 이미 완료된 주문: {skip_count}건 (송장번호 일치 또는 업데이트 불가 상태)")
         print(f"   ❌ 배송번호 없는 주문: {no_delivery_no_count}건 (샵바이 배송 처리 대기)")
         print(f"   ⏸️ 기타 스킵: {len(cornerlogis_orders) - len(update_candidates) - skip_count - no_delivery_no_count}건")
         print("=" * 60)
