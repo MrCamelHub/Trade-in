@@ -17,7 +17,7 @@ class ShopbyDeliveryClient:
     def __init__(self, 
                  base_url: str = "https://server-api.e-ncp.com",
                  system_key: str = "b1hLbVFoS1lUeUZIM0QrZTNuNklUQT09",
-                 auth_token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwYXJ0bmVyTm8iOjEyNzk1OSwiYWRtaW5ObyI6MjE5NjI0LCJhY2Nlc3NpYmxlSXBzIjpbXSwidXNhZ2UiOiJTRVJWRVIiLCJhZG1pbklkIjoiam9zZXBoIiwiaXNzIjoiTkhOIENvbW1lcmNlIiwiYXBwTm8iOjE0ODksIm1hbGxObyI6Nzg1MjIsInNvbHV0aW9uVHlwZSI6IlNIT1BCWSIsImV4cCI6NDkwODU2MzAwMiwic2hvcE5vIjoxMDAzNzY1LCJpYXQiOjE3NTQ5NjMwMDJ9.rEYIdHOb68Pr4N47aRRPI4bdjuW4KAg_bqUDyoF49Zc",
+                 auth_token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwYXJ0bmVyTm8iOjEyNzk1OSwiYWRtaW5ObyI6MjE5NjI0LCJhY2Nlc3NpYmxlSXBzIjpbXSwidXNhZ2UiOiJTRVJWRVIiLCJhZG1pbklkIjoiam9zZXBoIiwiaXNzIjoiTkhOIENvbW1lcmNlIiwiYXBwTm8iOjE0ODksIm1hbGxObyI6Nzg1MjIsInNvbHV0aW9uVHlwZSI6IlNIT1BCWSIsImV4cCI6NDkwODY2ODU0MSwic2hvcE5vIjoxMDAzNzY1LCJpYXQiOjE3NTUwNjg1NDF9.-aTwbWRNYrCDm-tNCyd-LzUxmKuv766QtQWeuLvoTtI",
                  version: str = "1.1"):
         self.base_url = base_url
         self.system_key = system_key
