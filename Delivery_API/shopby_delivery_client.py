@@ -99,9 +99,9 @@ class ShopbyDeliveryClient:
                 "pageSize": 100  # 충분히 큰 페이지 크기
             }
             
-                    encoded_params = urlencode(params, quote_via=quote)
-        url = f"{self.base_url}/orders?{encoded_params}"
-        headers = self._get_headers(version="1.1")  # 주문 조회는 1.1
+            encoded_params = urlencode(params, quote_via=quote)
+            url = f"{self.base_url}/orders?{encoded_params}"
+            headers = self._get_headers(version="1.1")  # 주문 조회는 1.1
             
             async with self.session.get(url, headers=headers) as response:
                 response.raise_for_status()
