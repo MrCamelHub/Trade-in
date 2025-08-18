@@ -53,6 +53,11 @@ class CornerlogisApiClient:
         headers = self._get_headers()
         params = {"goodsCodeList": goods_codes}
         
+        print(f"🔍 코너로지스 상품 조회 요청:")
+        print(f"  URL: {url}")
+        print(f"  Headers: {headers}")
+        print(f"  Params: {params}")
+        
         try:
             async with self.session.get(
                 url, 
