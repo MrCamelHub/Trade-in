@@ -398,19 +398,44 @@ def test_sku_mapping():
         # 1단계: SKU 매핑 로드
         print("=== 1단계: SKU 매핑 로드 ===")
         try:
-            sku_mapping = get_sku_mapping(config)
+            from sku_mapping import load_sku_mapping_from_sheets
+            
+            # 상세 디버깅 정보 수집
+            print(f"시트 ID: {config.mapping.spreadsheet_id}")
+            print(f"탭 이름: {config.mapping.tab_name}")
+            print(f"Google 인증 JSON 길이: {len(config.google_credentials_json) if config.google_credentials_json else 0}")
+            
+            sku_mapping = load_sku_mapping_from_sheets(
+                spreadsheet_id=config.mapping.spreadsheet_id,
+                tab_name=config.mapping.tab_name,
+                google_credentials_json=config.google_credentials_json,
+                google_credentials_path=str(config.google_credentials_path) if config.google_credentials_path else None
+            )
+            
+            # 처음 5개 매핑 샘플 수집
+            sample_mappings = dict(list(sku_mapping.items())[:5]) if sku_mapping else {}
+            
             result["sku_mapping_step"] = {
                 "status": "success",
                 "total_mappings": len(sku_mapping),
                 "test_sku_found": "50003453" in sku_mapping,
-                "test_sku_value": sku_mapping.get("50003453", "NOT_FOUND")
+                "test_sku_value": sku_mapping.get("50003453", "NOT_FOUND"),
+                "sheet_id": config.mapping.spreadsheet_id,
+                "tab_name": config.mapping.tab_name,
+                "sample_mappings": sample_mappings,
+                "google_auth_length": len(config.google_credentials_json) if config.google_credentials_json else 0
             }
             print(f"SKU 매핑 로드 성공: {len(sku_mapping)}개")
             print(f"50003453 매핑: {sku_mapping.get('50003453', 'NOT_FOUND')}")
         except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
             result["sku_mapping_step"] = {
                 "status": "error",
-                "error": str(e)
+                "error": str(e),
+                "error_detail": error_detail,
+                "sheet_id": config.mapping.spreadsheet_id if hasattr(config, 'mapping') else "NOT_FOUND",
+                "tab_name": config.mapping.tab_name if hasattr(config, 'mapping') else "NOT_FOUND"
             }
             result["errors"].append(f"SKU 매핑 로드 실패: {str(e)}")
             return jsonify(result)
@@ -455,6 +480,72 @@ def test_sku_mapping():
         return jsonify({
             "error": str(e),
             "test_sku": "50003453"
+        }), 500
+
+@app.route('/test-goods-id-conversion')
+def test_goods_id_conversion():
+    """실제 주문 데이터로 goodsId 변환 테스트 (POST 없이)"""
+    try:
+        import asyncio
+        from config import load_app_config
+        from shopby_api_client import ShopbyApiClient
+        from cornerlogis_api_client import CornerlogisApiClient
+        from sku_mapping import get_sku_mapping
+        from main import prepare_shopby_order_for_cornerlogis
+        
+        async def test_conversion():
+            config = load_app_config()
+            
+            # 1. 샵바이 주문 조회
+            async with ShopbyApiClient(config.shopby) as shopby_client:
+                shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=30, chunk_days=1)
+            
+            if not shopby_orders:
+                return {"error": "처리할 주문이 없습니다"}
+            
+            # 2. SKU 매핑 로드
+            sku_mapping = get_sku_mapping(config)
+            
+            # 3. 첫 번째 주문으로 goodsId 변환 테스트
+            if isinstance(shopby_orders, list) and len(shopby_orders) > 0:
+                if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
+                    actual_orders = shopby_orders[0]['contents']
+                else:
+                    actual_orders = shopby_orders
+            else:
+                actual_orders = shopby_orders
+            
+            if not actual_orders:
+                return {"error": "실제 주문 데이터가 없습니다"}
+            
+            # 첫 번째 주문 처리
+            first_order = actual_orders[0]
+            enhanced_order = prepare_shopby_order_for_cornerlogis(first_order)
+            
+            # 4. 코너로지스 변환 (goodsId 조회 포함)
+            async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
+                outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
+            
+            return {
+                "shopby_orders_count": len(actual_orders),
+                "sku_mapping_count": len(sku_mapping),
+                "first_order_no": first_order.get("orderNo", "N/A"),
+                "outbound_data_count": len(outbound_data_list),
+                "outbound_sample": outbound_data_list[:1] if outbound_data_list else [],
+                "enhanced_order_sample": {
+                    "orderNo": enhanced_order.get("orderNo"),
+                    "items_count": len(enhanced_order.get("items", []))
+                }
+            }
+        
+        result = asyncio.run(test_conversion())
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc()
         }), 500
 
 @app.route('/logs')
