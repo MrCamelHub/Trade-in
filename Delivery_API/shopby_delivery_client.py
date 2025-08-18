@@ -170,7 +170,7 @@ class ShopbyDeliveryClient:
         payload = {
             "changeStatusList": [
                 {
-                    "shippingNo": shipping_no,  # 문자열 유지
+                    "shippingNo": int(shipping_no),  # number 타입으로 변환
                     "deliveryCompanyType": delivery_company_type,
                     "invoiceNo": invoice_no
                 }
