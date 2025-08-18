@@ -40,7 +40,7 @@ class ShopbyDeliveryClient:
             "Version": api_version,
             "Content-Type": "application/json",
             "systemKey": self.system_key,
-            "mallKey": self.system_key,  # 외부 API 연동키
+            # mallKey 제거 - 에러 원인으로 확인됨
             "Authorization": f"Bearer {self.auth_token}"
         }
     
