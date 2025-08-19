@@ -26,6 +26,7 @@ def home():
             "/run-full": "Manual run full workflow",
             "/run-full-test": "Test full workflow with dummy data",
             "/test": "Test workflow",
+            "/test-cornerlogis-prepare": "Test Cornerlogis preparation (before POST)",
             "/status": "Service status",
             "/schedule": "Check schedule condition"
         },
@@ -581,6 +582,149 @@ def test_goods_id_conversion():
         return jsonify({
             "error": str(e),
             "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/test-cornerlogis-prepare', methods=['POST'])
+def test_cornerlogis_prepare():
+    """코너로지스 API에 POST하기 직전까지 실행하는 테스트 엔드포인트"""
+    try:
+        import asyncio
+        from config import load_app_config
+        from shopby_api_client import ShopbyApiClient
+        from cornerlogis_api_client import CornerlogisApiClient
+        from sku_mapping import get_sku_mapping
+        from main import prepare_shopby_order_for_cornerlogis
+        
+        async def test_preparation():
+            config = load_app_config()
+            
+            result = {
+                "step": "cornerlogis_prepare_test",
+                "start_time": datetime.now().isoformat(),
+                "config": {
+                    "cornerlogis_base_url": config.cornerlogis.base_url,
+                    "cornerlogis_api_key": config.cornerlogis.api_key[:10] + "..." if config.cornerlogis.api_key else None,
+                    "shopby_base_url": config.shopby.base_url,
+                    "mapping_spreadsheet_id": config.mapping.spreadsheet_id,
+                    "mapping_tab_name": config.mapping.tab_name
+                },
+                "steps": {},
+                "final_outbound_data": [],
+                "errors": []
+            }
+            
+            try:
+                # 1단계: 샵바이 주문 조회
+                print("=== 1단계: 샵바이 주문 조회 ===")
+                async with ShopbyApiClient(config.shopby) as shopby_client:
+                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
+                
+                result["steps"]["shopby_fetch"] = {
+                    "status": "success",
+                    "orders_count": len(shopby_orders),
+                    "message": f"샵바이에서 {len(shopby_orders)}개 주문 조회 완료"
+                }
+                print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개")
+                
+                if not shopby_orders:
+                    result["steps"]["shopby_fetch"]["status"] = "warning"
+                    result["steps"]["shopby_fetch"]["message"] = "처리할 주문이 없습니다"
+                    return result
+                
+                # 2단계: SKU 매핑 로드
+                print("=== 2단계: SKU 매핑 로드 ===")
+                sku_mapping = get_sku_mapping(config)
+                
+                result["steps"]["sku_mapping"] = {
+                    "status": "success",
+                    "mappings_count": len(sku_mapping),
+                    "message": f"SKU 매핑 {len(sku_mapping)}개 로드 완료"
+                }
+                print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개")
+                
+                # 3단계: 주문 데이터 변환 및 코너로지스 준비
+                print("=== 3단계: 주문 데이터 변환 및 코너로지스 준비 ===")
+                
+                # 첫 번째 주문으로 테스트
+                test_order = shopby_orders[0] if isinstance(shopby_orders, list) else shopby_orders
+                
+                # 주문 데이터 준비
+                enhanced_order = prepare_shopby_order_for_cornerlogis(test_order)
+                
+                result["steps"]["order_preparation"] = {
+                    "status": "success",
+                    "original_order": {
+                        "order_no": test_order.get("orderNo", "UNKNOWN"),
+                        "items_count": len(enhanced_order.get("items", [])),
+                        "recipient_name": enhanced_order.get("recipientName", "UNKNOWN"),
+                        "recipient_phone": enhanced_order.get("recipientPhone", "UNKNOWN"),
+                        "recipient_address": enhanced_order.get("recipientAddress", "UNKNOWN")
+                    },
+                    "message": "주문 데이터 변환 완료"
+                }
+                
+                # 4단계: 코너로지스 출고 데이터 준비 (POST 직전까지)
+                print("=== 4단계: 코너로지스 출고 데이터 준비 ===")
+                async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
+                    outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
+                
+                result["steps"]["cornerlogis_prepare"] = {
+                    "status": "success",
+                    "outbound_data_count": len(outbound_data_list),
+                    "message": f"코너로지스 출고 데이터 {len(outbound_data_list)}개 준비 완료 (POST 직전)"
+                }
+                
+                # 5단계: 최종 출고 데이터 상세 정보
+                print("=== 5단계: 최종 출고 데이터 상세 정보 ===")
+                for i, outbound_data in enumerate(outbound_data_list):
+                    outbound_info = {
+                        "index": i + 1,
+                        "outbound_id": outbound_data.get("outboundId", "N/A"),
+                        "company_order_id": outbound_data.get("companyOrderId", "N/A"),
+                        "goods_code": outbound_data.get("goodsCode", "N/A"),
+                        "goods_id": outbound_data.get("goodsId", "N/A"),
+                        "quantity": outbound_data.get("quantity", 0),
+                        "price": outbound_data.get("price", 0),
+                        "receiver": {
+                            "name": outbound_data.get("receiverName", "N/A"),
+                            "price": outbound_data.get("receiverPhone", "N/A"),
+                            "address": outbound_data.get("receiverAddress", "N/A"),
+                            "zipcode": outbound_data.get("receiverZipcode", "N/A")
+                        }
+                    }
+                    result["final_outbound_data"].append(outbound_info)
+                
+                result["steps"]["final_data"] = {
+                    "status": "success",
+                    "message": f"최종 출고 데이터 {len(result['final_outbound_data'])}개 구성 완료"
+                }
+                
+                print(f"코너로지스 API POST 직전까지 모든 준비 완료!")
+                print(f"출고 데이터 {len(outbound_data_list)}개 준비됨")
+                
+            except Exception as e:
+                import traceback
+                error_detail = traceback.format_exc()
+                result["errors"].append({
+                    "step": "unknown",
+                    "error": str(e),
+                    "traceback": error_detail
+                })
+                print(f"오류 발생: {str(e)}")
+            
+            result["end_time"] = datetime.now().isoformat()
+            result["status"] = "completed" if not result["errors"] else "failed"
+            return result
+        
+        result = asyncio.run(test_preparation())
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "timestamp": datetime.now().isoformat()
         }), 500
 
 @app.route('/logs')
