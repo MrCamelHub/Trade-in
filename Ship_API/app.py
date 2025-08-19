@@ -795,19 +795,36 @@ def test_shopby_delivery_status():
                 
                 # 2-1단계: 주문 상세 조회를 통해 옵션 번호 추출
                 print("2-1. 주문 상세 조회 및 옵션 번호 추출...")
-                order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
-                
-                if not order_option_nos:
+                try:
+                    order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
+                    print(f"✅ 옵션 번호 추출 완료: {len(order_option_nos)}개 - {order_option_nos}")
+                except Exception as e:
+                    import traceback
+                    error_detail = traceback.format_exc()
+                    print(f"❌ 옵션 번호 추출 실패: {str(e)}")
+                    print(f"상세 오류: {error_detail}")
+                    
+                    # 샵바이 API 원본 에러 메시지 확인
+                    try:
+                        print("🔍 샵바이 주문 상세 조회 시도...")
+                        order_detail = await shopby_client.get_order_detail(order_no)
+                        print(f"주문 상세 응답: {order_detail}")
+                    except Exception as detail_error:
+                        print(f"❌ 주문 상세 조회 실패: {str(detail_error)}")
+                        import traceback
+                        detail_traceback = traceback.format_exc()
+                        print(f"상세 오류: {detail_traceback}")
+                    
                     result["test_results"].append({
                         "order_no": order_no,
                         "step": "option_extraction",
                         "status": "failed",
-                        "message": "주문 옵션 번호를 찾을 수 없음",
-                        "extracted_options": []
+                        "message": f"주문 옵션 번호를 찾을 수 없음: {str(e)}",
+                        "extracted_options": [],
+                        "error_detail": error_detail,
+                        "order_detail_response": order_detail if 'order_detail' in locals() else None
                     })
                     return result
-                
-                print(f"✅ 옵션 번호 추출 완료: {len(order_option_nos)}개 - {order_option_nos}")
                 
                 # 2-2단계: 배송준비중 상태 변경 API 호출
                 print("2-2. 배송준비중 상태 변경 API 호출...")
