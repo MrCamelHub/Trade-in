@@ -27,9 +27,12 @@ class CornerlogisApiClient:
         """API 요청 헤더 생성"""
         headers = {
             "Content-Type": "application/json;charset=UTF-8",
-            "Accept": "application/json;charset=UTF-8",
-            "Authorization": "DSAGJOPcj2CSANIVOAF1FO"
+            "Accept": "application/json;charset=UTF-8"
         }
+        
+        # API 키가 설정된 경우에만 Authorization 헤더 추가
+        if self.config.api_key:
+            headers["Authorization"] = self.config.api_key
         
         return headers
     

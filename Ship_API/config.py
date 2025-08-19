@@ -65,7 +65,7 @@ def load_app_config() -> AppConfig:
     
     cornerlogis = CornerlogisApiConfig(
         base_url=cornerlogis_base_url,
-        api_key=os.getenv("CORNERLOGIS_API_KEY", "DSAGJOPcj2CSANIVOAF1FO")
+        api_key=os.getenv("CORNERLOGIS_API_KEY")
     )
     
     # 매핑 시트 설정
