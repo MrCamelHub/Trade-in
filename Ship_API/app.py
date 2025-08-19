@@ -771,6 +771,27 @@ def test_shopby_delivery_status():
                 order_no = test_order.get("orderNo", "UNKNOWN")
                 
                 print(f"테스트 주문: {order_no}")
+                print(f"주문 데이터 구조: {list(test_order.keys())}")
+                
+                # 주문 데이터 구조 디버깅
+                if "deliveryGroups" in test_order:
+                    delivery_groups = test_order["deliveryGroups"]
+                    print(f"배송 그룹 수: {len(delivery_groups)}")
+                    if delivery_groups:
+                        first_group = delivery_groups[0]
+                        print(f"첫 번째 배송 그룹 키들: {list(first_group.keys())}")
+                        if "orderProducts" in first_group:
+                            products = first_group["orderProducts"]
+                            print(f"주문 상품 수: {len(products)}")
+                            if products:
+                                first_product = products[0]
+                                print(f"첫 번째 상품 키들: {list(first_product.keys())}")
+                                if "orderProductOptions" in first_product:
+                                    options = first_product["orderProductOptions"]
+                                    print(f"상품 옵션 수: {len(options)}")
+                                    if options:
+                                        first_option = options[0]
+                                        print(f"첫 번째 옵션 키들: {list(first_option.keys())}")
                 
                 # 2-1단계: 주문 상세 조회를 통해 옵션 번호 추출
                 print("2-1. 주문 상세 조회 및 옵션 번호 추출...")
