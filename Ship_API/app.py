@@ -885,7 +885,128 @@ def get_logs():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/schedule')
+def check_schedule():
+    """스케줄러 상태 확인"""
+    try:
+        import schedule
+        from datetime import datetime
+        import pytz
+        
+        kst = pytz.timezone('Asia/Seoul')
+        now_kst = datetime.now(kst)
+        now_utc = datetime.utcnow()
+        
+        # 다음 실행 시간 계산
+        next_shopby = None
+        next_cornerlogis = None
+        
+        # 오늘 날짜가 평일인지 확인
+        is_weekday = now_kst.weekday() < 5  # 0=월요일, 4=금요일
+        
+        if is_weekday:
+            today_13_00_kst = now_kst.replace(hour=13, minute=0, second=0, microsecond=0)
+            today_13_30_kst = now_kst.replace(hour=13, minute=30, second=0, microsecond=0)
+            
+            if now_kst < today_13_00_kst:
+                next_shopby = today_13_00_kst.isoformat()
+            elif now_kst < today_13_30_kst:
+                next_shopby = "오늘 이미 실행됨"
+                next_cornerlogis = today_13_30_kst.isoformat()
+            else:
+                next_shopby = "오늘 이미 실행됨"
+                next_cornerlogis = "오늘 이미 실행됨"
+        else:
+            next_shopby = "주말 - 실행 안함"
+            next_cornerlogis = "주말 - 실행 안함"
+        
+        return jsonify({
+            "service": "ship-api-scheduler",
+            "timestamp": datetime.now().isoformat(),
+            "current_time": {
+                "kst": now_kst.isoformat(),
+                "utc": now_utc.isoformat()
+            },
+            "schedule": {
+                "shopby": {
+                    "time": "13:00 KST (04:00 UTC)",
+                    "days": "평일 (월-금)",
+                    "next_run": next_shopby,
+                    "description": "샵바이 주문 조회"
+                },
+                "cornerlogis": {
+                    "time": "13:30 KST (04:30 UTC)",
+                    "days": "평일 (월-금)",
+                    "next_run": next_cornerlogis,
+                    "description": "코너로지스 업로드"
+                }
+            },
+            "is_weekday": is_weekday,
+            "status": "running"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
+    # 스케줄러 초기화 및 시작
+    import schedule
+    import threading
+    import time
+    from datetime import datetime
+    import pytz
+    
+    def run_shopby_schedule():
+        """13:00 KST에 샵바이 주문 조회 실행"""
+        try:
+            print(f"[{datetime.now().isoformat()}] 🕐 13:00 KST 스케줄 실행: 샵바이 주문 조회")
+            from main import process_shopby_orders
+            result = asyncio.run(process_shopby_orders())
+            print(f"[{datetime.now().isoformat()}] ✅ 13:00 KST 스케줄 완료: {result.get('status', 'unknown')}")
+        except Exception as e:
+            print(f"[{datetime.now().isoformat()}] ❌ 13:00 KST 스케줄 오류: {str(e)}")
+    
+    def run_cornerlogis_schedule():
+        """13:30 KST에 코너로지스 업로드 실행"""
+        try:
+            print(f"[{datetime.now().isoformat()}] 🕐 13:30 KST 스케줄 실행: 코너로지스 업로드")
+            from main import process_cornerlogis_upload
+            result = asyncio.run(process_cornerlogis_upload())
+            print(f"[{datetime.now().isoformat()}] ✅ 13:30 KST 스케줄 완료: {result.get('status', 'unknown')}")
+        except Exception as e:
+            print(f"[{datetime.now().isoformat()}] ❌ 13:30 KST 스케줄 오류: {str(e)}")
+    
+    def start_scheduler():
+        """백그라운드에서 스케줄러 실행"""
+        # KST 시간대 설정
+        kst = pytz.timezone('Asia/Seoul')
+        
+        # 평일 13:00 KST (UTC 04:00) - 샵바이 주문 조회
+        schedule.every().monday.at("04:00").do(run_shopby_schedule)
+        schedule.every().tuesday.at("04:00").do(run_shopby_schedule)
+        schedule.every().wednesday.at("04:00").do(run_shopby_schedule)
+        schedule.every().thursday.at("04:00").do(run_shopby_schedule)
+        schedule.every().friday.at("04:00").do(run_shopby_schedule)
+        
+        # 평일 13:30 KST (UTC 04:30) - 코너로지스 업로드
+        schedule.every().monday.at("04:30").do(run_cornerlogis_schedule)
+        schedule.every().tuesday.at("04:30").do(run_cornerlogis_schedule)
+        schedule.every().wednesday.at("04:30").do(run_cornerlogis_schedule)
+        schedule.every().thursday.at("04:30").do(run_cornerlogis_schedule)
+        schedule.every().friday.at("04:30").do(run_cornerlogis_schedule)
+        
+        print(f"[{datetime.now().isoformat()}] 🚀 스케줄러 시작됨")
+        print(f"[{datetime.now().isoformat()}] 📅 평일 13:00 KST - 샵바이 주문 조회")
+        print(f"[{datetime.now().isoformat()}] 📅 평일 13:30 KST - 코너로지스 업로드")
+        
+        while True:
+            schedule.run_pending()
+            time.sleep(60)  # 1분마다 체크
+    
+    # 백그라운드 스레드에서 스케줄러 시작
+    scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
+    scheduler_thread.start()
+    
     # Railway에서는 PORT 환경변수를 사용
     port = int(os.environ.get('PORT', 8000))
+    print(f"[{datetime.now().isoformat()}] 🌐 Flask 서버 시작: 포트 {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
