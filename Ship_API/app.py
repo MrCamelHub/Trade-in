@@ -27,6 +27,7 @@ def home():
             "/run-full-test": "Test full workflow with dummy data",
             "/test": "Test workflow",
             "/test-cornerlogis-prepare": "Test Cornerlogis preparation (before POST)",
+            "/test-shopby-delivery-status": "Test Shopby delivery status update to 배송준비중",
             "/status": "Service status",
             "/schedule": "Check schedule condition"
         },
@@ -717,6 +718,114 @@ def test_cornerlogis_prepare():
             return result
         
         result = asyncio.run(test_preparation())
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "timestamp": datetime.now().isoformat()
+        }), 500
+
+@app.route('/test-shopby-delivery-status', methods=['POST'])
+def test_shopby_delivery_status():
+    """샵바이 주문 상태를 배송준비중으로 변경하는 테스트 엔드포인트"""
+    try:
+        import asyncio
+        from config import load_app_config
+        from shopby_api_client import ShopbyApiClient
+        
+        async def test_delivery_status_update():
+            config = load_app_config()
+            
+            result = {
+                "step": "shopby_delivery_status_test",
+                "start_time": datetime.now().isoformat(),
+                "config": {
+                    "shopby_base_url": config.shopby.base_url,
+                    "shopby_system_key": config.shopby.system_key[:20] + "..." if config.shopby.system_key else None,
+                    "shopby_auth_token": config.shopby.auth_token[:50] + "..." if config.shopby.auth_token else None
+                },
+                "test_results": [],
+                "errors": []
+            }
+            
+            try:
+                # 1단계: 샵바이에서 최근 주문 조회
+                print("=== 1단계: 샵바이 최근 주문 조회 ===")
+                async with ShopbyApiClient(config.shopby) as shopby_client:
+                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
+                
+                if not shopby_orders:
+                    result["errors"].append("처리할 주문이 없습니다")
+                    return result
+                
+                print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개")
+                
+                # 2단계: 각 주문에 대해 배송준비중 상태 변경 테스트
+                print("=== 2단계: 배송준비중 상태 변경 테스트 ===")
+                
+                # 첫 번째 주문으로 테스트
+                test_order = shopby_orders[0] if isinstance(shopby_orders, list) else shopby_orders
+                order_no = test_order.get("orderNo", "UNKNOWN")
+                
+                print(f"테스트 주문: {order_no}")
+                
+                # 2-1단계: 주문 상세 조회를 통해 옵션 번호 추출
+                print("2-1. 주문 상세 조회 및 옵션 번호 추출...")
+                order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
+                
+                if not order_option_nos:
+                    result["test_results"].append({
+                        "order_no": order_no,
+                        "step": "option_extraction",
+                        "status": "failed",
+                        "message": "주문 옵션 번호를 찾을 수 없음",
+                        "extracted_options": []
+                    })
+                    return result
+                
+                print(f"✅ 옵션 번호 추출 완료: {len(order_option_nos)}개 - {order_option_nos}")
+                
+                # 2-2단계: 배송준비중 상태 변경 API 호출
+                print("2-2. 배송준비중 상태 변경 API 호출...")
+                delivery_result = await shopby_client.prepare_delivery(order_option_nos)
+                
+                test_result = {
+                    "order_no": order_no,
+                    "step": "delivery_status_update",
+                    "extracted_options": order_option_nos,
+                    "api_result": delivery_result
+                }
+                
+                if delivery_result["status"] == "success":
+                    print(f"✅ 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")
+                    test_result["status"] = "success"
+                    test_result["message"] = f"{delivery_result['processed_count']}개 옵션을 배송준비중 상태로 변경했습니다"
+                else:
+                    print(f"❌ 배송준비중 상태 변경 실패: {delivery_result['message']}")
+                    test_result["status"] = "failed"
+                    test_result["message"] = delivery_result["message"]
+                    test_result["error"] = delivery_result.get("error", "Unknown error")
+                
+                result["test_results"].append(test_result)
+                
+            except Exception as e:
+                import traceback
+                error_detail = traceback.format_exc()
+                result["errors"].append({
+                    "step": "unknown",
+                    "error": str(e),
+                    "traceback": error_detail
+                })
+                print(f"오류 발생: {str(e)}")
+            
+            result["end_time"] = datetime.now().isoformat()
+            result["status"] = "completed" if not result["errors"] else "failed"
+            return result
+        
+        result = asyncio.run(test_delivery_status_update())
         return jsonify(result)
         
     except Exception as e:
