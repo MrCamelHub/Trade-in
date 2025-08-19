@@ -1,0 +1,35 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+# Delivery API 웹 서비스
+[services.delivery-api-web]
+name = "delivery-api-web"
+source = "."
+buildCommand = "pip install -r requirements.txt"
+startCommand = "python app.py"
+
+[services.delivery-api-web.variables]
+TZ = "Asia/Seoul"
+PYTHONPATH = "."
+PORT = "8000"
+
+# 송장번호 동기화 스케줄러 (30분마다)
+[services.delivery-scheduler]
+name = "delivery-scheduler"
+source = "."
+buildCommand = "pip install -r requirements.txt"
+
+[services.delivery-scheduler.schedule]
+# 30분마다 실행 (평일 체크는 API 내부에서)
+cron = "*/30 * * * *"
+command = "python scheduler.py"
+
+[services.delivery-scheduler.variables]
+TZ = "Asia/Seoul"
+PYTHONPATH = "."
