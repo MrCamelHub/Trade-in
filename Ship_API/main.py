@@ -21,17 +21,35 @@ def prepare_shopby_order_for_cornerlogis(shopby_order: Dict[str, Any]) -> Dict[s
     """
     샵바이 API 응답 데이터를 코너로지스 변환에 적합한 형식으로 준비
     """
+    print(f"🔍 주문 데이터 구조 분석 시작: {shopby_order.get('orderNo', 'UNKNOWN')}")
+    print(f"  주문 키들: {list(shopby_order.keys())}")
+    
     # 배송 그룹에서 정보 추출
     delivery_groups = shopby_order.get('deliveryGroups', [])
+    print(f"  배송 그룹 수: {len(delivery_groups)}")
+    
     if not delivery_groups:
+        print(f"  ⚠️ 배송 그룹이 없습니다. 원본 주문 반환")
         return shopby_order
     
     delivery_group = delivery_groups[0]
+    print(f"  첫 번째 배송 그룹 키들: {list(delivery_group.keys())}")
     
     # 상품 정보 추출
     items = []
-    for product in delivery_group.get('orderProducts', []):
-        for option in product.get('orderProductOptions', []):
+    order_products = delivery_group.get('orderProducts', [])
+    print(f"  주문 상품 수: {len(order_products)}")
+    
+    for i, product in enumerate(order_products):
+        print(f"    상품 {i+1}: {product.get('productName', 'UNKNOWN')}")
+        print(f"      상품 키들: {list(product.keys())}")
+        
+        order_product_options = product.get('orderProductOptions', [])
+        print(f"      상품 옵션 수: {len(order_product_options)}")
+        
+        for j, option in enumerate(order_product_options):
+            print(f"        옵션 {j+1} 키들: {list(option.keys())}")
+            
             item = {
                 'productCode': product.get('productManagementCd'),
                 'productManagementCd': product.get('productManagementCd'),
@@ -43,6 +61,9 @@ def prepare_shopby_order_for_cornerlogis(shopby_order: Dict[str, Any]) -> Dict[s
                 'salePrice': option.get('salePrice', 0)
             }
             items.append(item)
+            print(f"        ✅ 변환된 아이템: {item}")
+    
+    print(f"  총 변환된 아이템 수: {len(items)}")
     
     # 향상된 주문 데이터 구성
     enhanced_order = {
@@ -56,6 +77,7 @@ def prepare_shopby_order_for_cornerlogis(shopby_order: Dict[str, Any]) -> Dict[s
         'items': items
     }
     
+    print(f"✅ 주문 데이터 변환 완료: {len(items)}개 상품")
     return enhanced_order
 
 
@@ -276,8 +298,8 @@ async def process_cornerlogis_upload() -> Dict[str, Any]:
                         try:
                             print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
                             
-                            # 주문 옵션 번호 추출
-                            order_option_nos = shopby_client.extract_order_option_nos(shopby_order)
+                            # 주문 상세 조회를 통해 옵션 번호 추출
+                            order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
                             
                             if order_option_nos:
                                 # 샵바이 API로 배송준비중 상태 변경
@@ -802,12 +824,12 @@ async def run_full_workflow_test():
                         try:
                             print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
                             
-                            # 주문 옵션 번호 추출
-                            order_option_nos = cornerlogis_client.extract_order_option_nos(shopby_order)
+                            # 주문 상세 조회를 통해 옵션 번호 추출
+                            order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
                             
                             if order_option_nos:
                                 # 샵바이 API로 배송준비중 상태 변경
-                                delivery_result = await cornerlogis_client.prepare_delivery(order_option_nos)
+                                delivery_result = await shopby_client.prepare_delivery(order_option_nos)
                                 
                                 if delivery_result["status"] == "success":
                                     print(f"✅ 주문 {order_no} 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")

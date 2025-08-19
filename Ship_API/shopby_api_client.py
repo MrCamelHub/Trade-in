@@ -110,6 +110,64 @@ class ShopbyApiClient:
             print(f"샵바이 API 응답 파싱 실패: {e}")
             raise
     
+    async def get_order_detail(
+        self,
+        order_no: str
+    ) -> Dict[str, Any]:
+        """
+        특정 주문의 상세 정보 조회
+        
+        Args:
+            order_no: 주문 번호
+        
+        Returns:
+            주문 상세 정보
+        """
+        if not self.session:
+            raise RuntimeError("ClientSession not initialized. Use async context manager.")
+        
+        url = f"{self.config.base_url}/orders/{order_no}"
+        headers = self._get_headers()
+        headers["Version"] = "1.0"  # API 요구사항
+        
+        try:
+            print(f"🔍 샵바이 주문 상세 조회: {order_no}")
+            print(f"  URL: {url}")
+            print(f"  Headers: {headers}")
+            
+            async with self.session.get(url, headers=headers) as response:
+                print(f"  Response Status: {response.status}")
+                
+                if response.status == 200:
+                    result = await response.json()
+                    print(f"✅ 주문 상세 조회 성공: {order_no}")
+                    return result
+                else:
+                    error_text = await response.text()
+                    print(f"❌ 주문 상세 조회 실패: {response.status}")
+                    print(f"  Error Response: {error_text}")
+                    
+                    return {
+                        "status": "error",
+                        "message": f"주문 상세 조회 실패 (HTTP {response.status})",
+                        "error": error_text
+                    }
+                    
+        except aiohttp.ClientError as e:
+            print(f"❌ 샵바이 API 호출 오류: {e}")
+            return {
+                "status": "error",
+                "message": f"샵바이 API 호출 오류: {str(e)}",
+                "error": str(e)
+            }
+        except Exception as e:
+            print(f"❌ 예상치 못한 오류: {e}")
+            return {
+                "status": "error",
+                "message": f"예상치 못한 오류: {str(e)}",
+                "error": str(e)
+            }
+
     async def get_order_details(self, order_no: str) -> Optional[Dict[str, Any]]:
         """
         특정 주문의 상세 정보 조회
@@ -296,6 +354,54 @@ class ShopbyApiClient:
             
         except Exception as e:
             print(f"❌ 주문 옵션 번호 추출 중 오류: {e}")
+        
+        return order_option_nos
+
+    async def extract_order_option_nos_from_detail(
+        self,
+        order_no: str
+    ) -> List[int]:
+        """
+        주문 상세 조회를 통해 주문 옵션 번호들을 추출
+        
+        Args:
+            order_no: 주문 번호
+        
+        Returns:
+            주문 옵션 번호 리스트
+        """
+        order_option_nos = []
+        
+        try:
+            # 주문 상세 정보 조회
+            order_detail = await self.get_order_detail(order_no)
+            
+            if order_detail.get("status") == "error":
+                print(f"❌ 주문 {order_no} 상세 조회 실패: {order_detail.get('message')}")
+                return order_option_nos
+            
+            # 주문 상품들에서 옵션 번호 추출
+            delivery_groups = order_detail.get('deliveryGroups', [])
+            if not delivery_groups:
+                print(f"⚠️ 주문 {order_no}에 배송 그룹이 없습니다.")
+                return order_option_nos
+            
+            for delivery_group in delivery_groups:
+                order_products = delivery_group.get('orderProducts', [])
+                
+                for product in order_products:
+                    order_options = product.get('orderOptions', [])  # orderOptions 사용
+                    
+                    for option in order_options:
+                        option_no = option.get('orderOptionNo')
+                        if option_no is not None:
+                            order_option_nos.append(option_no)
+                            print(f"  📦 상품: {product.get('productName', 'UNKNOWN')} - 옵션번호: {option_no}")
+            
+            print(f"✅ 주문 {order_no} 상세 조회에서 {len(order_option_nos)}개 옵션 번호 추출 완료")
+            
+        except Exception as e:
+            print(f"❌ 주문 {order_no} 상세 조회 중 옵션 번호 추출 오류: {e}")
         
         return order_option_nos
 
