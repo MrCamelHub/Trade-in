@@ -261,6 +261,117 @@ class ShopbyApiClient:
             print(f"⚠️ 단일 범위 조회 실패, 청크로 폴백: {e}")
             return await self.get_pay_done_orders_chunked(days_back=days_back, chunk_days=chunk_days)
 
+    def extract_order_option_nos(self, order: Dict[str, Any]) -> List[int]:
+        """
+        주문 데이터에서 주문 옵션 번호들을 추출
+        
+        Args:
+            order: 샵바이 주문 데이터
+        
+        Returns:
+            주문 옵션 번호 리스트
+        """
+        order_option_nos = []
+        
+        try:
+            # 주문 상품들에서 옵션 번호 추출
+            delivery_groups = order.get('deliveryGroups', [])
+            if not delivery_groups:
+                print(f"⚠️ 주문 {order.get('orderNo', 'UNKNOWN')}에 배송 그룹이 없습니다.")
+                return order_option_nos
+            
+            for delivery_group in delivery_groups:
+                order_products = delivery_group.get('orderProducts', [])
+                
+                for product in order_products:
+                    order_product_options = product.get('orderProductOptions', [])
+                    
+                    for option in order_product_options:
+                        option_no = option.get('orderOptionNo')
+                        if option_no is not None:
+                            order_option_nos.append(option_no)
+                            print(f"  📦 상품: {product.get('productName', 'UNKNOWN')} - 옵션번호: {option_no}")
+            
+            print(f"✅ 주문 {order.get('orderNo', 'UNKNOWN')}에서 {len(order_option_nos)}개 옵션 번호 추출 완료")
+            
+        except Exception as e:
+            print(f"❌ 주문 옵션 번호 추출 중 오류: {e}")
+        
+        return order_option_nos
+
+    async def prepare_delivery(
+        self,
+        order_option_nos: List[int]
+    ) -> Dict[str, Any]:
+        """
+        주문 옵션들을 배송준비중 상태로 변경
+        
+        Args:
+            order_option_nos: 배송준비중으로 변경할 주문 옵션 번호 리스트
+        
+        Returns:
+            API 응답 결과
+        """
+        if not self.session:
+            raise RuntimeError("ClientSession not initialized. Use async context manager.")
+        
+        if not order_option_nos:
+            raise ValueError("order_option_nos는 비어있을 수 없습니다.")
+        
+        url = f"{self.config.base_url}/orders/prepare-delivery"
+        headers = self._get_headers()
+        headers["version"] = "1.0"  # API 요구사항에 맞춰 version 헤더 추가
+        
+        payload = order_option_nos
+        
+        try:
+            print(f"🚚 샵바이 배송준비중 상태 변경 요청:")
+            print(f"  URL: {url}")
+            print(f"  Headers: {headers}")
+            print(f"  Payload: {payload}")
+            print(f"  대상 옵션 수: {len(order_option_nos)}개")
+            
+            async with self.session.put(url, headers=headers, json=payload) as response:
+                print(f"  Response Status: {response.status}")
+                
+                if response.status == 200:
+                    result = await response.json()
+                    print(f"✅ 배송준비중 상태 변경 성공: {len(order_option_nos)}개 옵션")
+                    return {
+                        "status": "success",
+                        "message": f"{len(order_option_nos)}개 옵션을 배송준비중 상태로 변경했습니다.",
+                        "data": result,
+                        "processed_count": len(order_option_nos)
+                    }
+                else:
+                    error_text = await response.text()
+                    print(f"❌ 배송준비중 상태 변경 실패: {response.status}")
+                    print(f"  Error Response: {error_text}")
+                    
+                    return {
+                        "status": "error",
+                        "message": f"배송준비중 상태 변경 실패 (HTTP {response.status})",
+                        "error": error_text,
+                        "processed_count": 0
+                    }
+                    
+        except aiohttp.ClientError as e:
+            print(f"❌ 샵바이 API 호출 오류: {e}")
+            return {
+                "status": "error",
+                "message": f"샵바이 API 호출 오류: {str(e)}",
+                "error": str(e),
+                "processed_count": 0
+            }
+        except Exception as e:
+            print(f"❌ 예상치 못한 오류: {e}")
+            return {
+                "status": "error",
+                "message": f"예상치 못한 오류: {str(e)}",
+                "error": str(e),
+                "processed_count": 0
+            }
+
 
 # 사용 예시 및 테스트 함수
 async def test_shopby_api():

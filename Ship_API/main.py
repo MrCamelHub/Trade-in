@@ -227,7 +227,8 @@ async def process_cornerlogis_upload() -> Dict[str, Any]:
         # 2. 코너로지스 API로 전송
         print("2. 코너로지스 API로 주문 전송 중...")
         
-        async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
+        async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client, \
+                  ShopbyApiClient(config.shopby) as shopby_client:
             # 샵바이 API 응답 구조 처리
             if isinstance(shopby_orders, list) and len(shopby_orders) > 0:
                 if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
@@ -270,6 +271,45 @@ async def process_cornerlogis_upload() -> Dict[str, Any]:
                             "items_count": len(outbound_data_list),
                             "cornerlogis_result": cornerlogis_result
                         })
+                        
+                        # 3. 코너로지스 출고 성공 후 샵바이 상태를 배송준비중으로 변경
+                        try:
+                            print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
+                            
+                            # 주문 옵션 번호 추출
+                            order_option_nos = shopby_client.extract_order_option_nos(shopby_order)
+                            
+                            if order_option_nos:
+                                # 샵바이 API로 배송준비중 상태 변경
+                                delivery_result = await shopby_client.prepare_delivery(order_option_nos)
+                                
+                                if delivery_result["status"] == "success":
+                                    print(f"✅ 주문 {order_no} 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")
+                                    result["processed_orders"][-1]["shopby_status_update"] = {
+                                        "status": "success",
+                                        "message": delivery_result["message"],
+                                        "processed_options": delivery_result["processed_count"]
+                                    }
+                                else:
+                                    print(f"⚠️ 주문 {order_no} 배송준비중 상태 변경 실패: {delivery_result['message']}")
+                                    result["processed_orders"][-1]["shopby_status_update"] = {
+                                        "status": "failed",
+                                        "message": delivery_result["message"],
+                                        "error": delivery_result.get("error", "Unknown error")
+                                    }
+                            else:
+                                print(f"⚠️ 주문 {order_no}에서 주문 옵션 번호를 찾을 수 없습니다.")
+                                result["processed_orders"][-1]["shopby_status_update"] = {
+                                    "status": "skipped",
+                                    "message": "주문 옵션 번호를 찾을 수 없음"
+                                }
+                                
+                        except Exception as e:
+                            print(f"❌ 주문 {order_no} 샵바이 상태 변경 중 오류: {str(e)}")
+                            result["processed_orders"][-1]["shopby_status_update"] = {
+                                "status": "error",
+                                "message": f"상태 변경 중 오류: {str(e)}"
+                            }
                     else:
                         error_msg = f"주문 {order_no} 코너로지스 API 호출 실패"
                         print(error_msg)
@@ -757,6 +797,45 @@ async def run_full_workflow_test():
                             "cornerlogis_result": cornerlogis_result,
                             "test_product_codes": [item['productManagementCd'] for item in enhanced_order.get('items', [])]
                         })
+                        
+                        # 3. 코너로지스 출고 성공 후 샵바이 상태를 배송준비중으로 변경
+                        try:
+                            print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
+                            
+                            # 주문 옵션 번호 추출
+                            order_option_nos = cornerlogis_client.extract_order_option_nos(shopby_order)
+                            
+                            if order_option_nos:
+                                # 샵바이 API로 배송준비중 상태 변경
+                                delivery_result = await cornerlogis_client.prepare_delivery(order_option_nos)
+                                
+                                if delivery_result["status"] == "success":
+                                    print(f"✅ 주문 {order_no} 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")
+                                    result["processed_orders"][-1]["shopby_status_update"] = {
+                                        "status": "success",
+                                        "message": delivery_result["message"],
+                                        "processed_options": delivery_result["processed_count"]
+                                    }
+                                else:
+                                    print(f"⚠️ 주문 {order_no} 배송준비중 상태 변경 실패: {delivery_result['message']}")
+                                    result["processed_orders"][-1]["shopby_status_update"] = {
+                                        "status": "failed",
+                                        "message": delivery_result["message"],
+                                        "error": delivery_result.get("error", "Unknown error")
+                                    }
+                            else:
+                                print(f"⚠️ 주문 {order_no}에서 주문 옵션 번호를 찾을 수 없습니다.")
+                                result["processed_orders"][-1]["shopby_status_update"] = {
+                                    "status": "skipped",
+                                    "message": "주문 옵션 번호를 찾을 수 없음"
+                                }
+                                
+                        except Exception as e:
+                            print(f"❌ 주문 {order_no} 샵바이 상태 변경 중 오류: {str(e)}")
+                            result["processed_orders"][-1]["shopby_status_update"] = {
+                                "status": "error",
+                                "message": f"상태 변경 중 오류: {str(e)}"
+                            }
                     else:
                         error_msg = f"주문 {order_no} 코너로지스 API 호출 실패"
                         print(error_msg)
