@@ -390,9 +390,9 @@ class ShopbyApiClient:
                 order_products = delivery_group.get('orderProducts', [])
                 
                 for product in order_products:
-                    order_options = product.get('orderOptions', [])  # orderOptions 사용
+                    order_product_options = product.get('orderProductOptions', [])  # orderProductOptions 사용
                     
-                    for option in order_options:
+                    for option in order_product_options:
                         option_no = option.get('orderOptionNo')
                         if option_no is not None:
                             order_option_nos.append(option_no)
