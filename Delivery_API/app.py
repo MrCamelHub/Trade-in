@@ -26,7 +26,10 @@ def home():
             "/invoice/check": "송장번호 업데이트 대상 조회",
             "/shipping/process": "발송 처리",
             "/shipping/complete": "발송 완료 처리",
-            "/test": "Test workflow"
+            "/test": "Test workflow",
+            "/execute": "전체 워크플로우 실행 (항상 dry_run=false)",
+            "/scheduler/status": "스케줄러 상태 확인",
+            "/scheduler/start": "스케줄러 시작 (백그라운드)"
         },
         "timestamp": datetime.now().isoformat()
     })
@@ -139,6 +142,111 @@ def test():
         "message": "Delivery API 테스트 성공",
         "timestamp": datetime.now().isoformat()
     })
+
+@app.route('/execute')
+def execute_workflow():
+    """전체 워크플로우 실행 (항상 dry_run=false)"""
+    try:
+        from invoice_tracker import InvoiceTracker
+        
+        async def run_full_workflow():
+            async with InvoiceTracker() as tracker:
+                # 1. 송장번호 업데이트 대상 조회
+                candidates = await tracker.get_orders_needing_update()
+                
+                # 2. 송장번호 동기화 실행 (dry_run=false)
+                sync_result = await tracker.run_full_sync(dry_run=False)
+                
+                # 3. 전체 워크플로우 결과 반환
+                return {
+                    "workflow": "full_execution",
+                    "dry_run": False,
+                    "candidates_count": len(candidates),
+                    "sync_result": sync_result,
+                    "execution_time": datetime.now().isoformat()
+                }
+        
+        result = asyncio.run(run_full_workflow())
+        
+        return jsonify({
+            "status": "success",
+            "message": "전체 워크플로우 실행 완료 (dry_run=false)",
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/scheduler/status')
+def scheduler_status():
+    """스케줄러 상태 확인"""
+    try:
+        from scheduler import is_weekday_kst, is_business_hours_kst, should_run_now, get_next_run_time
+        import pytz
+        
+        kst = pytz.timezone("Asia/Seoul")
+        now = datetime.now(kst)
+        
+        # 스케줄러 상태 계산
+        is_weekday = is_weekday_kst()
+        is_business_hours = is_business_hours_kst()
+        should_run = should_run_now()
+        next_run_time = get_next_run_time()
+        
+        status_info = {
+            "current_time": now.isoformat(),
+            "timezone": "Asia/Seoul",
+            "is_weekday": is_weekday,
+            "is_business_hours": is_business_hours,
+            "should_run_now": should_run,
+            "next_run_time": next_run_time.isoformat() if next_run_time else None,
+            "schedule": {
+                "description": "평일 9:00 ~ 19:00, 30분마다 실행",
+                "business_start": "09:00",
+                "business_end": "19:00",
+                "interval": "30분"
+            }
+        }
+        
+        return jsonify({
+            "status": "success",
+            "scheduler_status": status_info,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/scheduler/start', methods=['POST'])
+def start_scheduler():
+    """스케줄러 시작 (백그라운드에서 실행)"""
+    try:
+        import threading
+        import asyncio
+        
+        def run_scheduler_in_thread():
+            """별도 스레드에서 스케줄러 실행"""
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                from scheduler import run_continuous_scheduler
+                loop.run_until_complete(run_continuous_scheduler())
+            except Exception as e:
+                print(f"스케줄러 스레드 오류: {e}")
+        
+        # 백그라운드에서 스케줄러 시작
+        scheduler_thread = threading.Thread(target=run_scheduler_in_thread, daemon=True)
+        scheduler_thread.start()
+        
+        return jsonify({
+            "status": "success",
+            "message": "스케줄러가 백그라운드에서 시작되었습니다",
+            "thread_id": scheduler_thread.ident,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
