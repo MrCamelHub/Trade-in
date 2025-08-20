@@ -116,8 +116,15 @@ class ShopbyDeliveryClient:
                         # shippings 배열에서 shippingNo 우선 사용
                         shippings = order.get("shippings", [])
                         shipping_no = None
+                        
+                        print(f"  🔍 shippings 구조 분석:")
+                        print(f"    shippings 배열 길이: {len(shippings)}")
                         if shippings:
+                            print(f"    shippings[0] 전체: {json.dumps(shippings[0], indent=4, ensure_ascii=False)}")
                             shipping_no = shippings[0].get("shippingNo")
+                            print(f"    shippings[0].shippingNo: {shipping_no}")
+                        else:
+                            print(f"    shippings 배열이 비어있음")
                         
                         # 기존 방식 (백업용)
                         original_delivery_no = order.get("originalDeliveryNo")
