@@ -37,18 +37,10 @@ def prepare_shopby_order_for_cornerlogis(shopby_order: Dict[str, Any]) -> Dict[s
     
     # 상품 정보 추출
     items = []
-    order_products = delivery_group.get('orderProducts', [])
-    print(f"  주문 상품 수: {len(order_products)}")
-    
-    for i, product in enumerate(order_products):
-        print(f"    상품 {i+1}: {product.get('productName', 'UNKNOWN')}")
-        print(f"      상품 키들: {list(product.keys())}")
-        
-        order_product_options = product.get('orderProductOptions', [])
-        print(f"      상품 옵션 수: {len(order_product_options)}")
-        
-        for j, option in enumerate(order_product_options):
-            print(f"        옵션 {j+1} 키들: {list(option.keys())}")
+    for product in delivery_group.get('orderProducts', []):
+        for option in product.get('orderOptions', []):
+            print(f"    상품 {product.get('productName', 'UNKNOWN')}: {option.get('productName', 'UNKNOWN')}")
+            print(f"      상품 키들: {list(product.keys())}")
             
             item = {
                 'productCode': product.get('productManagementCd'),

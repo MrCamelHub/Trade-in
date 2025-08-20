@@ -342,9 +342,9 @@ class ShopbyApiClient:
                 order_products = delivery_group.get('orderProducts', [])
                 
                 for product in order_products:
-                    order_product_options = product.get('orderProductOptions', [])
+                    order_option_nos = product.get('orderOptions', [])  # orderOptions 사용
                     
-                    for option in order_product_options:
+                    for option in order_option_nos:
                         option_no = option.get('orderOptionNo')
                         if option_no is not None:
                             order_option_nos.append(option_no)
@@ -395,9 +395,9 @@ class ShopbyApiClient:
                 order_products = delivery_group.get('orderProducts', [])
                 
                 for product in order_products:
-                    order_product_options = product.get('orderProductOptions', [])  # orderProductOptions 사용
+                    order_options = product.get('orderOptions', [])  # orderOptions 사용
                     
-                    for option in order_product_options:
+                    for option in order_options:
                         option_no = option.get('orderOptionNo')
                         if option_no is not None:
                             order_option_nos.append(option_no)
@@ -461,11 +461,40 @@ class ShopbyApiClient:
                     print(f"❌ 배송준비중 상태 변경 실패: {response.status}")
                     print(f"  Error Response: {error_text}")
                     
+                    # 샵바이 API 오류 응답 파싱 시도
+                    failed_option_no = None
+                    error_message = f"배송준비중 상태 변경 실패 (HTTP {response.status})"
+                    
+                    try:
+                        error_json = json.loads(error_text)
+                        if isinstance(error_json, dict):
+                            # 샵바이 API 오류 메시지에서 실패한 옵션 번호 추출 시도
+                            error_message = error_json.get('message', error_message)
+                            
+                            # 다양한 가능한 오류 필드들 확인
+                            error_fields = ['error', 'errorMessage', 'errorMsg', 'detail', 'description']
+                            for field in error_fields:
+                                if field in error_json:
+                                    field_value = error_json[field]
+                                    if isinstance(field_value, str):
+                                        # 오류 메시지에서 숫자 추출 시도 (실패한 옵션 번호)
+                                        import re
+                                        numbers = re.findall(r'\d+', field_value)
+                                        if numbers:
+                                            failed_option_no = int(numbers[0])
+                                            print(f"  🔍 실패한 옵션 번호 추출: {failed_option_no}")
+                                            break
+                    except (json.JSONDecodeError, ValueError, IndexError):
+                        # JSON 파싱 실패 시 원본 오류 텍스트 사용
+                        pass
+                    
                     return {
                         "status": "error",
-                        "message": f"배송준비중 상태 변경 실패 (HTTP {response.status})",
+                        "message": error_message,
                         "error": error_text,
-                        "processed_count": 0
+                        "failed_option_no": failed_option_no,
+                        "processed_count": 0,
+                        "note": "요청한 옵션 중 하나라도 실패하면 나머지 옵션도 변경되지 않습니다."
                     }
                     
         except aiohttp.ClientError as e:
