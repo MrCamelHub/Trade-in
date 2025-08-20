@@ -767,86 +767,63 @@ def test_shopby_delivery_status():
             }
             
             try:
-                # 1단계: 샵바이에서 최근 주문 조회
-                print("=== 1단계: 샵바이 최근 주문 조회 ===")
+                # 특정 주문번호 사용 (코너로지스에서 성공적으로 처리된 주문)
+                target_order_no = "202508201738275093"
+                print(f"🎯 테스트 대상 주문번호: {target_order_no}")
+                
+                # 1단계: 샵바이에서 해당 주문 상세 조회
+                print("=== 1단계: 샵바이 주문 상세 조회 ===")
                 async with ShopbyApiClient(config.shopby) as shopby_client:
-                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
+                    print(f"🔍 주문 {target_order_no} 상세 조회 중...")
+                    order_detail = await shopby_client.get_order_detail(target_order_no)
+                    
+                    if not order_detail or order_detail.get("status") == "error":
+                        error_msg = order_detail.get('message') if order_detail else "주문 상세 조회 실패"
+                        print(f"❌ 주문 {target_order_no} 상세 조회 실패: {error_msg}")
+                        result["errors"].append(f"주문 상세 조회 실패: {error_msg}")
+                        return result
+                    
+                    print(f"✅ 주문 {target_order_no} 상세 조회 성공")
+                    print(f"주문 데이터 구조: {list(order_detail.keys())}")
                 
-                if not shopby_orders:
-                    result["errors"].append("처리할 주문이 없습니다")
+                # 2단계: 주문 상세 데이터에서 옵션 번호 추출
+                print("=== 2단계: 옵션 번호 추출 ===")
+                
+                # 주문 상품들에서 옵션 번호 추출
+                delivery_groups = order_detail.get('deliveryGroups', [])
+                if not delivery_groups:
+                    print(f"⚠️ 주문 {target_order_no}에 배송 그룹이 없습니다.")
+                    result["errors"].append("배송 그룹이 없습니다")
                     return result
                 
-                print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개")
-                
-                # 2단계: 각 주문에 대해 배송준비중 상태 변경 테스트
-                print("=== 2단계: 배송준비중 상태 변경 테스트 ===")
-                
-                # 첫 번째 주문으로 테스트
-                test_order = shopby_orders[0] if isinstance(shopby_orders, list) else shopby_orders
-                order_no = test_order.get("orderNo", "UNKNOWN")
-                
-                print(f"테스트 주문: {order_no}")
-                print(f"주문 데이터 구조: {list(test_order.keys())}")
-                
-                # 주문 데이터 구조 디버깅
-                if "deliveryGroups" in test_order:
-                    delivery_groups = test_order["deliveryGroups"]
-                    print(f"배송 그룹 수: {len(delivery_groups)}")
-                    if delivery_groups:
-                        first_group = delivery_groups[0]
-                        print(f"첫 번째 배송 그룹 키들: {list(first_group.keys())}")
-                        if "orderProducts" in first_group:
-                            products = first_group["orderProducts"]
-                            print(f"주문 상품 수: {len(products)}")
-                            if products:
-                                first_product = products[0]
-                                print(f"첫 번째 상품 키들: {list(first_product.keys())}")
-                                if "orderProductOptions" in first_product:
-                                    options = first_product["orderProductOptions"]
-                                    print(f"상품 옵션 수: {len(options)}")
-                                    if options:
-                                        first_option = options[0]
-                                        print(f"첫 번째 옵션 키들: {list(first_option.keys())}")
-                
-                # 2-1단계: 주문 상세 조회를 통해 옵션 번호 추출
-                print("2-1. 주문 상세 조회 및 옵션 번호 추출...")
-                try:
-                    order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
-                    print(f"✅ 옵션 번호 추출 완료: {len(order_option_nos)}개 - {order_option_nos}")
-                except Exception as e:
-                    import traceback
-                    error_detail = traceback.format_exc()
-                    print(f"❌ 옵션 번호 추출 실패: {str(e)}")
-                    print(f"상세 오류: {error_detail}")
+                order_option_nos = []
+                for delivery_group in delivery_groups:
+                    order_products = delivery_group.get('orderProducts', [])
                     
-                    # 샵바이 API 원본 에러 메시지 확인
-                    try:
-                        print("🔍 샵바이 주문 상세 조회 시도...")
-                        order_detail = await shopby_client.get_order_detail(order_no)
-                        print(f"주문 상세 응답: {order_detail}")
-                    except Exception as detail_error:
-                        print(f"❌ 주문 상세 조회 실패: {str(detail_error)}")
-                        import traceback
-                        detail_traceback = traceback.format_exc()
-                        print(f"상세 오류: {detail_traceback}")
-                    
-                    result["test_results"].append({
-                        "order_no": order_no,
-                        "step": "option_extraction",
-                        "status": "failed",
-                        "message": f"주문 옵션 번호를 찾을 수 없음: {str(e)}",
-                        "extracted_options": [],
-                        "error_detail": error_detail,
-                        "order_detail_response": order_detail if 'order_detail' in locals() else None
-                    })
+                    for product in order_products:
+                        order_product_options = product.get('orderProductOptions', [])
+                        
+                        for option in order_product_options:
+                            option_no = option.get('orderOptionNo')
+                            if option_no is not None:
+                                order_option_nos.append(option_no)
+                                print(f"  📦 상품: {product.get('productName', 'UNKNOWN')} - 옵션번호: {option_no}")
+                
+                print(f"✅ 옵션 번호 추출 완료: {len(order_option_nos)}개 - {order_option_nos}")
+                
+                if not order_option_nos:
+                    print(f"❌ 주문 {target_order_no}에서 옵션 번호를 찾을 수 없습니다.")
+                    result["errors"].append("옵션 번호를 찾을 수 없습니다")
                     return result
                 
-                # 2-2단계: 배송준비중 상태 변경 API 호출
-                print("2-2. 배송준비중 상태 변경 API 호출...")
-                delivery_result = await shopby_client.prepare_delivery(order_option_nos)
+                # 3단계: 배송준비중 상태 변경 API 호출
+                print("=== 3단계: 배송준비중 상태 변경 API 호출 ===")
+                
+                async with ShopbyApiClient(config.shopby) as shopby_client:
+                    delivery_result = await shopby_client.prepare_delivery(order_option_nos)
                 
                 test_result = {
-                    "order_no": order_no,
+                    "order_no": target_order_no,
                     "step": "delivery_status_update",
                     "extracted_options": order_option_nos,
                     "api_result": delivery_result
