@@ -37,13 +37,19 @@ class CornerlogisProductionClient:
     
     async def get_orders_with_invoices(
         self, 
-        status_list: str = "COMPLETED_SHIPMENTS"
+        status_list: str = "COMPLETED_SHIPMENTS",
+        page_size: int = 100,
+        start_date: str = None,
+        end_date: str = None
     ) -> List[Dict[str, Any]]:
         """
-        송장번호가 있는 주문 목록 조회
+        송장번호가 있는 주문 목록 조회 (페이지네이션 지원)
         
         Args:
             status_list: 조회할 주문 상태 (기본값: COMPLETED_SHIPMENTS)
+            page_size: 페이지당 조회 건수 (기본값: 100)
+            start_date: 검색 시작일 (YYYY-MM-DD 형식)
+            end_date: 검색 종료일 (YYYY-MM-DD 형식)
             
         Returns:
             주문 목록
@@ -53,54 +59,119 @@ class CornerlogisProductionClient:
         
         url = f"{self.base_url}/api/v1/order/getOrders"
         headers = self._get_headers()
-        params = {"statusList": status_list}
         
-        print(f"🔍 코너로지스 운영 API 주문 조회:")
+        print(f"🔍 코너로지스 운영 API 주문 조회 (페이지네이션 지원):")
         print(f"  URL: {url}")
-        print(f"  Headers: {headers}")
-        print(f"  Params: {params}")
+        print(f"  상태: {status_list}")
+        print(f"  페이지 크기: {page_size}")
+        if start_date and end_date:
+            print(f"  검색 기간: {start_date} ~ {end_date}")
         
-        try:
-            async with self.session.get(url, headers=headers, params=params) as response:
-                response.raise_for_status()
-                data = await response.json()
-                
-                # 응답 구조 분석
-                if isinstance(data, dict) and "data" in data and "list" in data["data"]:
-                    orders = data["data"]["list"]
-                    print(f"✅ 주문 조회 성공: {len(orders)}건")
-                    return orders
-                else:
-                    print("❌ 예상하지 못한 응답 구조")
-                    return []
+        all_orders = []
+        page = 1
+        total_processed = 0
+        
+        while True:
+            params = {
+                "statusList": status_list,
+                "page": page,
+                "size": page_size
+            }
+            
+            # 날짜 범위가 지정된 경우 추가
+            if start_date:
+                params["startDate"] = start_date
+            if end_date:
+                params["endDate"] = end_date
+            
+            print(f"  📄 페이지 {page} 조회 중... (파라미터: {params})")
+            
+            try:
+                async with self.session.get(url, headers=headers, params=params) as response:
+                    response.raise_for_status()
+                    data = await response.json()
                     
-        except aiohttp.ClientError as e:
-            print(f"❌ 코너로지스 주문 조회 실패: {e}")
-            return []
-        except Exception as e:
-            print(f"❌ 예상치 못한 오류: {e}")
-            return []
-    
-    async def get_orders_with_new_invoices(self) -> List[Dict[str, Any]]:
+                    # 응답 구조 분석
+                    if isinstance(data, dict) and "data" in data and "list" in data["data"]:
+                        orders = data["data"]["list"]
+                        current_count = len(orders)
+                        all_orders.extend(orders)
+                        total_processed += current_count
+                        
+                        print(f"    ✅ 페이지 {page}: {current_count}건 조회됨 (누적: {total_processed}건)")
+                        
+                        # 마지막 페이지 체크 (페이지 크기보다 적은 건수가 반환되면 마지막 페이지)
+                        if current_count < page_size:
+                            print(f"    🏁 마지막 페이지 도달 (페이지 {page})")
+                            break
+                        
+                        page += 1
+                        
+                        # 안전장치: 너무 많은 페이지를 조회하지 않도록 제한
+                        if page > 100:  # 최대 100페이지까지만 조회
+                            print(f"    ⚠️ 안전장치: 최대 페이지 수(100)에 도달하여 중단")
+                            break
+                            
+                    else:
+                        print(f"    ❌ 페이지 {page}: 예상하지 못한 응답 구조")
+                        break
+                        
+            except aiohttp.ClientError as e:
+                print(f"    ❌ 페이지 {page} 조회 실패: {e}")
+                break
+            except Exception as e:
+                print(f"    ❌ 페이지 {page} 예상치 못한 오류: {e}")
+                break
+        
+        print(f"📊 총 {len(all_orders)}건의 주문 조회 완료")
+        return all_orders
+
+    async def get_orders_with_new_invoices(
+        self,
+        page_size: int = 100,
+        days_back: int = 7
+    ) -> List[Dict[str, Any]]:
         """
-        새로 송장번호가 생긴 주문들 조회
+        새로 송장번호가 생긴 주문들 조회 (페이지네이션 지원)
         PROGRESSING_SHIPMENTS(출고 진행 중)와 COMPLETED_SHIPMENTS(출고 완료) 상태에서 조회
         (delivery.code가 null이 아닌 주문들)
         
+        Args:
+            page_size: 페이지당 조회 건수 (기본값: 100)
+            days_back: 몇 일 전부터 조회할지 (기본값: 7일)
+            
         Returns:
             송장번호가 있는 주문 목록
         """
-        print("📡 코너로지스에서 송장번호가 있는 주문들 조회...")
+        print("📡 코너로지스에서 송장번호가 있는 주문들 조회 (페이지네이션 지원)...")
+        
+        # 날짜 범위 계산
+        from datetime import datetime, timedelta
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+        
+        print(f"   📅 검색 기간: {start_date} ~ {end_date}")
         
         # 출고 진행 중과 출고 완료 상태 모두 조회
-        progressing_orders = await self.get_orders_with_invoices("PROGRESSING_SHIPMENTS")
-        completed_orders = await self.get_orders_with_invoices("COMPLETED_SHIPMENTS")
+        progressing_orders = await self.get_orders_with_invoices(
+            "PROGRESSING_SHIPMENTS", 
+            page_size, 
+            start_date, 
+            end_date
+        )
+        completed_orders = await self.get_orders_with_invoices(
+            "COMPLETED_SHIPMENTS", 
+            page_size, 
+            start_date, 
+            end_date
+        )
         
         print(f"   📦 출고 진행 중(PROGRESSING_SHIPMENTS): {len(progressing_orders)}건")
         print(f"   📦 출고 완료(COMPLETED_SHIPMENTS): {len(completed_orders)}건")
         
-        # 두 목록 합치기 (중복 제거)
+        # 모든 주문 합치기
         all_orders = progressing_orders + completed_orders
+        print(f"   📊 총 주문 수: {len(all_orders)}건")
         
         # 중복 제거 (companyOrderId 기준)
         seen_orders = set()
@@ -112,11 +183,10 @@ class CornerlogisProductionClient:
                 unique_orders.append(order)
         
         print(f"   📋 중복 제거 후 총: {len(unique_orders)}건")
-        all_orders = unique_orders
         
         # delivery.code가 있는 주문들만 필터링
         orders_with_invoices = []
-        for order in all_orders:
+        for order in unique_orders:
             if "orderItems" in order:
                 for item in order["orderItems"]:
                     delivery = item.get("delivery", {})
@@ -138,6 +208,38 @@ class CornerlogisProductionClient:
         
         print(f"📦 송장번호가 있는 주문: {len(orders_with_invoices)}건")
         return orders_with_invoices
+
+    async def get_all_completed_shipments(
+        self,
+        page_size: int = 100,
+        days_back: int = 7
+    ) -> List[Dict[str, Any]]:
+        """
+        모든 출고 완료 주문 조회 (페이지네이션 지원)
+        
+        Args:
+            page_size: 페이지당 조회 건수 (기본값: 100)
+            days_back: 몇 일 전부터 조회할지 (기본값: 7일)
+            
+        Returns:
+            출고 완료 주문 목록
+        """
+        print(f"📡 코너로지스에서 모든 출고 완료 주문 조회 (최근 {days_back}일)...")
+        
+        # 날짜 범위 계산
+        from datetime import datetime, timedelta
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+        
+        orders = await self.get_orders_with_invoices(
+            "COMPLETED_SHIPMENTS", 
+            page_size, 
+            start_date, 
+            end_date
+        )
+        
+        print(f"   📊 총 출고 완료 주문: {len(orders)}건")
+        return orders
     
     def extract_shopby_order_no(self, company_order_id: str) -> str:
         """
