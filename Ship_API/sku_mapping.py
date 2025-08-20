@@ -133,19 +133,8 @@ def load_sku_mapping_from_sheets(
             # 둘 다 값이 있을 때만 매핑에 추가
             if shopby_sku and cornerlogis_goods_id:
                 sku_mapping[shopby_sku] = cornerlogis_goods_id
-                # 중요한 SKU 매핑 발견시 로깅
-                if shopby_sku in ['50003453', '50001206', '50001111']:
-                    print(f"  📋 매핑 발견: {shopby_sku} → {cornerlogis_goods_id}")
         
         print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
-        
-        # 중요한 SKU들 확인
-        important_skus = ['50003453', '50001206', '50001111']
-        for sku in important_skus:
-            if sku in sku_mapping:
-                print(f"  ✅ {sku} → {sku_mapping[sku]}")
-            else:
-                print(f"  ❌ {sku} 매핑 누락!")
         
         return sku_mapping
         

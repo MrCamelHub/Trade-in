@@ -123,8 +123,8 @@ class ShopbyApiClient:
         Returns:
             주문 상세 정보
         """
-        if not self.session or self.session.closed:
-            raise RuntimeError("ClientSession not initialized or closed. Use async context manager.")
+        if not self.session:
+            raise RuntimeError("ClientSession not initialized. Use async context manager.")
         
         url = f"{self.config.base_url}/orders/{order_no}"
         headers = self._get_headers()
@@ -342,9 +342,9 @@ class ShopbyApiClient:
                 order_products = delivery_group.get('orderProducts', [])
                 
                 for product in order_products:
-                    order_option_nos = product.get('orderOptions', [])  # orderOptions 사용
+                    order_product_options = product.get('orderProductOptions', [])
                     
-                    for option in order_option_nos:
+                    for option in order_product_options:
                         option_no = option.get('orderOptionNo')
                         if option_no is not None:
                             order_option_nos.append(option_no)
@@ -373,16 +373,11 @@ class ShopbyApiClient:
         order_option_nos = []
         
         try:
-            # 세션 상태 재확인
-            if not self.session or self.session.closed:
-                raise RuntimeError("ClientSession not initialized or closed. Use async context manager.")
-            
             # 주문 상세 정보 조회
             order_detail = await self.get_order_detail(order_no)
             
-            if not order_detail or order_detail.get("status") == "error":
-                error_msg = order_detail.get('message') if order_detail else "주문 상세 조회 실패"
-                print(f"❌ 주문 {order_no} 상세 조회 실패: {error_msg}")
+            if order_detail.get("status") == "error":
+                print(f"❌ 주문 {order_no} 상세 조회 실패: {order_detail.get('message')}")
                 return order_option_nos
             
             # 주문 상품들에서 옵션 번호 추출
@@ -395,9 +390,9 @@ class ShopbyApiClient:
                 order_products = delivery_group.get('orderProducts', [])
                 
                 for product in order_products:
-                    order_options = product.get('orderOptions', [])  # orderOptions 사용
+                    order_product_options = product.get('orderProductOptions', [])  # orderProductOptions 사용
                     
-                    for option in order_options:
+                    for option in order_product_options:
                         option_no = option.get('orderOptionNo')
                         if option_no is not None:
                             order_option_nos.append(option_no)
@@ -407,8 +402,6 @@ class ShopbyApiClient:
             
         except Exception as e:
             print(f"❌ 주문 {order_no} 상세 조회 중 옵션 번호 추출 오류: {e}")
-            import traceback
-            print(f"상세 오류: {traceback.format_exc()}")
         
         return order_option_nos
 
@@ -425,11 +418,11 @@ class ShopbyApiClient:
         Returns:
             API 응답 결과
         """
-        if not self.session or self.session.closed:
-            raise RuntimeError("ClientSession not initialized or closed. Use async context manager.")
+        if not self.session:
+            raise RuntimeError("ClientSession not initialized. Use async context manager.")
         
         if not order_option_nos:
-            raise ValueError("order_option_nos는 비어있을 수 없습니다. 주문 상세 조회에서 옵션 번호를 추출하지 못했습니다.")
+            raise ValueError("order_option_nos는 비어있을 수 없습니다.")
         
         url = f"{self.config.base_url}/orders/prepare-delivery"
         headers = self._get_headers()
@@ -461,47 +454,18 @@ class ShopbyApiClient:
                     print(f"❌ 배송준비중 상태 변경 실패: {response.status}")
                     print(f"  Error Response: {error_text}")
                     
-                    # 샵바이 API 오류 응답 파싱 시도
-                    failed_option_no = None
-                    error_message = f"배송준비중 상태 변경 실패 (HTTP {response.status})"
-                    
-                    try:
-                        error_json = json.loads(error_text)
-                        if isinstance(error_json, dict):
-                            # 샵바이 API 오류 메시지에서 실패한 옵션 번호 추출 시도
-                            error_message = error_json.get('message', error_message)
-                            
-                            # 다양한 가능한 오류 필드들 확인
-                            error_fields = ['error', 'errorMessage', 'errorMsg', 'detail', 'description']
-                            for field in error_fields:
-                                if field in error_json:
-                                    field_value = error_json[field]
-                                    if isinstance(field_value, str):
-                                        # 오류 메시지에서 숫자 추출 시도 (실패한 옵션 번호)
-                                        import re
-                                        numbers = re.findall(r'\d+', field_value)
-                                        if numbers:
-                                            failed_option_no = int(numbers[0])
-                                            print(f"  🔍 실패한 옵션 번호 추출: {failed_option_no}")
-                                            break
-                    except (json.JSONDecodeError, ValueError, IndexError):
-                        # JSON 파싱 실패 시 원본 오류 텍스트 사용
-                        pass
-                    
                     return {
                         "status": "error",
-                        "message": error_message,
+                        "message": f"배송준비중 상태 변경 실패 (HTTP {response.status})",
                         "error": error_text,
-                        "failed_option_no": failed_option_no,
-                        "processed_count": 0,
-                        "note": "요청한 옵션 중 하나라도 실패하면 나머지 옵션도 변경되지 않습니다."
+                        "processed_count": 0
                     }
                     
         except aiohttp.ClientError as e:
-            print(f"❌ 배송준비중 상태 변경 API 호출 오류: {e}")
+            print(f"❌ 샵바이 API 호출 오류: {e}")
             return {
                 "status": "error",
-                "message": f"API 호출 오류: {str(e)}",
+                "message": f"샵바이 API 호출 오류: {str(e)}",
                 "error": str(e),
                 "processed_count": 0
             }
