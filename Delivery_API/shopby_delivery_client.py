@@ -113,22 +113,35 @@ class ShopbyDeliveryClient:
                 
                 for order in orders:
                     if order.get("orderNo") == order_no:
-                        # 최상위 originalDeliveryNo 먼저 확인 (실제 originShippingNo와 동일)
+                        # shippings 배열에서 shippingNo 우선 사용
+                        shippings = order.get("shippings", [])
+                        shipping_no = None
+                        if shippings:
+                            shipping_no = shippings[0].get("shippingNo")
+                        
+                        # 기존 방식 (백업용)
                         original_delivery_no = order.get("originalDeliveryNo")
                         
                         # 없으면 deliveryGroups에서 deliveryNo 사용
-                        if not original_delivery_no:
+                        if not shipping_no and not original_delivery_no:
                             delivery_groups = order.get("deliveryGroups", [])
                             if delivery_groups:
                                 original_delivery_no = delivery_groups[0].get("deliveryNo")
                         
+                        # 최종 배송번호 결정 (shippings.shippingNo 우선)
+                        final_shipping_no = shipping_no or original_delivery_no
+                        
                         print(f"✅ 주문 조회 성공: {order_no}")
-                        print(f"  배송번호(deliveryNo): {original_delivery_no}")
+                        print(f"  배송번호 비교:")
+                        print(f"    shippings[0].shippingNo: {shipping_no}")
+                        print(f"    originalDeliveryNo: {original_delivery_no}")
+                        print(f"    최종 사용 배송번호: {final_shipping_no}")
+                        print(f"    두 값이 동일한가?: {shipping_no == original_delivery_no}")
                         print(f"  주문상태: {order.get('orderStatusType', 'N/A')}")
                         print(f"  결제상태: {order.get('paymentStatusType', 'N/A')}")
                         
-                        # originalDeliveryNo 필드 업데이트
-                        order["originalDeliveryNo"] = original_delivery_no
+                        # 최종 배송번호로 필드 업데이트
+                        order["originalDeliveryNo"] = final_shipping_no
                         
                         return order
                 
@@ -173,7 +186,7 @@ class ShopbyDeliveryClient:
         payload = {
             "changeStatusList": [
                 {
-                    "shippingNo": int(shipping_no),  # number 타입으로 변환 (API 문서 예시와 일치)
+                    "shippingNo": shipping_no,  # 원본 타입 그대로 사용 (int 변환 제거)
                     "deliveryCompanyType": delivery_company_type,
                     "invoiceNo": invoice_no
                 }
