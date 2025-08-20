@@ -123,8 +123,8 @@ class ShopbyApiClient:
         Returns:
             주문 상세 정보
         """
-        if not self.session:
-            raise RuntimeError("ClientSession not initialized. Use async context manager.")
+        if not self.session or self.session.closed:
+            raise RuntimeError("ClientSession not initialized or closed. Use async context manager.")
         
         url = f"{self.config.base_url}/orders/{order_no}"
         headers = self._get_headers()
@@ -373,11 +373,16 @@ class ShopbyApiClient:
         order_option_nos = []
         
         try:
+            # 세션 상태 재확인
+            if not self.session or self.session.closed:
+                raise RuntimeError("ClientSession not initialized or closed. Use async context manager.")
+            
             # 주문 상세 정보 조회
             order_detail = await self.get_order_detail(order_no)
             
-            if order_detail.get("status") == "error":
-                print(f"❌ 주문 {order_no} 상세 조회 실패: {order_detail.get('message')}")
+            if not order_detail or order_detail.get("status") == "error":
+                error_msg = order_detail.get('message') if order_detail else "주문 상세 조회 실패"
+                print(f"❌ 주문 {order_no} 상세 조회 실패: {error_msg}")
                 return order_option_nos
             
             # 주문 상품들에서 옵션 번호 추출
@@ -402,6 +407,8 @@ class ShopbyApiClient:
             
         except Exception as e:
             print(f"❌ 주문 {order_no} 상세 조회 중 옵션 번호 추출 오류: {e}")
+            import traceback
+            print(f"상세 오류: {traceback.format_exc()}")
         
         return order_option_nos
 
@@ -418,11 +425,11 @@ class ShopbyApiClient:
         Returns:
             API 응답 결과
         """
-        if not self.session:
-            raise RuntimeError("ClientSession not initialized. Use async context manager.")
+        if not self.session or self.session.closed:
+            raise RuntimeError("ClientSession not initialized or closed. Use async context manager.")
         
         if not order_option_nos:
-            raise ValueError("order_option_nos는 비어있을 수 없습니다.")
+            raise ValueError("order_option_nos는 비어있을 수 없습니다. 주문 상세 조회에서 옵션 번호를 추출하지 못했습니다.")
         
         url = f"{self.config.base_url}/orders/prepare-delivery"
         headers = self._get_headers()
@@ -462,10 +469,10 @@ class ShopbyApiClient:
                     }
                     
         except aiohttp.ClientError as e:
-            print(f"❌ 샵바이 API 호출 오류: {e}")
+            print(f"❌ 배송준비중 상태 변경 API 호출 오류: {e}")
             return {
                 "status": "error",
-                "message": f"샵바이 API 호출 오류: {str(e)}",
+                "message": f"API 호출 오류: {str(e)}",
                 "error": str(e),
                 "processed_count": 0
             }

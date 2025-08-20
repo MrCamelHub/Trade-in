@@ -649,6 +649,21 @@ def test_cornerlogis_prepare():
                 # 첫 번째 주문으로 테스트
                 test_order = shopby_orders[0] if isinstance(shopby_orders, list) else shopby_orders
                 
+                # 주문번호 추출 로직 개선
+                order_no = test_order.get("orderNo")
+                if not order_no:
+                    # 다른 가능한 필드에서 주문번호 찾기
+                    order_no = test_order.get("orderId") or test_order.get("id") or test_order.get("order_id")
+                
+                if not order_no:
+                    print(f"❌ 주문번호를 찾을 수 없습니다. 주문 데이터 구조:")
+                    print(f"  사용 가능한 키들: {list(test_order.keys())}")
+                    result["errors"].append("주문번호를 찾을 수 없습니다")
+                    return result
+                
+                print(f"테스트 주문: {order_no}")
+                print(f"주문 데이터 구조: {list(test_order.keys())}")
+                
                 # 주문 데이터 준비
                 enhanced_order = prepare_shopby_order_for_cornerlogis(test_order)
                 
