@@ -63,8 +63,46 @@ async def run_scheduled_sync():
         }
 
 
+async def run_continuous_scheduler():
+    """지속적으로 실행되는 스케줄러 (30분마다 체크)"""
+    print("🚀 지속적 스케줄러 시작 (30분마다 체크)")
+    print("=" * 50)
+    
+    while True:
+        try:
+            kst = pytz.timezone("Asia/Seoul")
+            now = datetime.now(kst)
+            
+            print(f"\n🕐 스케줄러 체크: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            
+            # 현재 실행해야 하는지 확인
+            if is_weekday_kst():
+                current_minute = now.minute
+                if current_minute in [0, 30]:  # 0분 또는 30분
+                    print(f"✅ 실행 시간 도달 - 송장번호 동기화 시작")
+                    result = await run_scheduled_sync()
+                    print(f"📊 실행 결과: {result.get('status', 'unknown')}")
+                else:
+                    next_run = None
+                    if current_minute < 30:
+                        next_run = f"{now.strftime('%H')}:30"
+                    else:
+                        next_hour = now.hour + 1
+                        next_run = f"{next_hour:02d}:00"
+                    print(f"⏳ 다음 실행 시간: {next_run}")
+            else:
+                print(f"⏭️ 주말/공휴일 - 스킵")
+            
+            # 1분마다 체크
+            await asyncio.sleep(60)
+            
+        except Exception as e:
+            print(f"❌ 스케줄러 루프 오류: {e}")
+            await asyncio.sleep(60)  # 오류 발생 시에도 1분 후 재시도
+
+
 async def main():
-    """메인 함수"""
+    """메인 함수 (일회성 실행)"""
     print("🚀 Delivery API 스케줄러 시작")
     print("=" * 50)
     
