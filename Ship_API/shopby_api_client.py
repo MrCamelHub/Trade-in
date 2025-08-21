@@ -390,10 +390,10 @@ class ShopbyApiClient:
                 order_products = delivery_group.get('orderProducts', [])
                 
                 for product in order_products:
-                    order_product_options = product.get('orderProductOptions', [])  # orderProductOptions 사용
+                    order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
                     
-                    for option in order_product_options:
-                        option_no = option.get('orderOptionNo')
+                    for option in order_options:
+                        option_no = option.get('orderOptionNo')  # orderOptionNo 추출
                         if option_no is not None:
                             order_option_nos.append(option_no)
                             print(f"  📦 상품: {product.get('productName', 'UNKNOWN')} - 옵션번호: {option_no}")

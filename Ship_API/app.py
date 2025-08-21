@@ -649,21 +649,6 @@ def test_cornerlogis_prepare():
                 # 첫 번째 주문으로 테스트
                 test_order = shopby_orders[0] if isinstance(shopby_orders, list) else shopby_orders
                 
-                # 주문번호 추출 로직 개선
-                order_no = test_order.get("orderNo")
-                if not order_no:
-                    # 다른 가능한 필드에서 주문번호 찾기
-                    order_no = test_order.get("orderId") or test_order.get("id") or test_order.get("order_id")
-                
-                if not order_no:
-                    print(f"❌ 주문번호를 찾을 수 없습니다. 주문 데이터 구조:")
-                    print(f"  사용 가능한 키들: {list(test_order.keys())}")
-                    result["errors"].append("주문번호를 찾을 수 없습니다")
-                    return result
-                
-                print(f"테스트 주문: {order_no}")
-                print(f"주문 데이터 구조: {list(test_order.keys())}")
-                
                 # 주문 데이터 준비
                 enhanced_order = prepare_shopby_order_for_cornerlogis(test_order)
                 
@@ -767,111 +752,114 @@ def test_shopby_delivery_status():
             }
             
             try:
-                # 특정 주문번호 사용 (코너로지스에서 성공적으로 처리된 주문)
-                target_order_no = "202508201738275093"
-                print(f"🎯 테스트 대상 주문번호: {target_order_no}")
-                
-                # 1단계: 샵바이에서 해당 주문 상세 조회
-                print("=== 1단계: 샵바이 주문 상세 조회 ===")
+                # 1단계: 샵바이에서 최근 주문 조회
+                print("=== 1단계: 샵바이 최근 주문 조회 ===")
                 async with ShopbyApiClient(config.shopby) as shopby_client:
-                    print(f"🔍 주문 {target_order_no} 상세 조회 중...")
-                    order_detail = await shopby_client.get_order_detail(target_order_no)
-                    
-                    if not order_detail or order_detail.get("status") == "error":
-                        error_msg = order_detail.get('message') if order_detail else "주문 상세 조회 실패"
-                        print(f"❌ 주문 {target_order_no} 상세 조회 실패: {error_msg}")
-                        result["errors"].append(f"주문 상세 조회 실패: {error_msg}")
-                        return result
-                    
-                    print(f"✅ 주문 {target_order_no} 상세 조회 성공")
-                    print(f"주문 데이터 구조: {list(order_detail.keys())}")
-                    
-                    # 데이터 구조 상세 분석
-                    print(f"🔍 주문 데이터 상세 분석:")
-                    for key, value in order_detail.items():
-                        if isinstance(value, list):
-                            print(f"  {key}: [리스트] 길이 {len(value)}")
-                            if value and len(value) > 0:
-                                print(f"    첫 번째 항목 키들: {list(value[0].keys()) if isinstance(value[0], dict) else 'N/A'}")
-                        elif isinstance(value, dict):
-                            print(f"  {key}: {{딕셔너리}} 키들: {list(value.keys())}")
-                        else:
-                            print(f"  {key}: {type(value).__name__} = {value}")
+                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
                 
-                # 2단계: 주문 상세 데이터에서 옵션 번호 추출
-                print("=== 2단계: 옵션 번호 추출 ===")
-                
-                # 다양한 가능한 필드에서 옵션 번호 찾기
-                order_option_nos = []
-                
-                # 방법 1: deliveryGroups에서 찾기
-                delivery_groups = order_detail.get('deliveryGroups', [])
-                if delivery_groups:
-                    print(f"📦 deliveryGroups에서 옵션 번호 찾기 (길이: {len(delivery_groups)})")
-                    for i, delivery_group in enumerate(delivery_groups):
-                        print(f"  배송 그룹 {i+1} 키들: {list(delivery_group.keys())}")
-                        
-                        order_products = delivery_group.get('orderProducts', [])
-                        for j, product in enumerate(order_products):
-                            print(f"    상품 {j+1} 키들: {list(product.keys())}")
-                            
-                            order_options = product.get('orderOptions', [])
-                            for k, option in enumerate(order_options):
-                                option_no = option.get('orderOptionNo')
-                                if option_no is not None:
-                                    order_option_nos.append(option_no)
-                                    print(f"      옵션 {k+1}: {option_no}")
-                
-                # 방법 2: 직접 orderProducts에서 찾기
-                if not order_option_nos:
-                    print(f"🔍 deliveryGroups가 없어서 직접 orderProducts에서 찾기")
-                    order_products = order_detail.get('orderProducts', [])
-                    if order_products:
-                        print(f"  orderProducts 길이: {len(order_products)}")
-                        for i, product in enumerate(order_products):
-                            print(f"    상품 {i+1} 키들: {list(product.keys())}")
-                            
-                            order_options = product.get('orderOptions', [])
-                            for j, option in enumerate(order_options):
-                                option_no = option.get('orderOptionNo')
-                                if option_no is not None:
-                                    order_option_nos.append(option_no)
-                                    print(f"      옵션 {j+1}: {option_no}")
-                
-                # 방법 3: 다른 가능한 필드들 확인
-                if not order_option_nos:
-                    print(f"🔍 다른 가능한 필드들 확인")
-                    possible_fields = ['orderOptions', 'options', 'items', 'products']
-                    for field in possible_fields:
-                        if field in order_detail:
-                            print(f"  {field} 필드 발견: {type(order_detail[field])}")
-                            if isinstance(order_detail[field], list):
-                                print(f"    길이: {len(order_detail[field])}")
-                                if order_detail[field]:
-                                    print(f"    첫 번째 항목 키들: {list(order_detail[field][0].keys()) if isinstance(order_detail[field][0], dict) else 'N/A'}")
-                
-                print(f"✅ 옵션 번호 추출 완료: {len(order_option_nos)}개 - {order_option_nos}")
-                
-                if not order_option_nos:
-                    print(f"❌ 주문 {target_order_no}에서 옵션 번호를 찾을 수 없습니다.")
-                    print(f"🔍 전체 주문 데이터 구조를 로그에 저장합니다.")
-                    result["errors"].append("옵션 번호를 찾을 수 없습니다")
-                    result["debug_info"] = {
-                        "order_detail_keys": list(order_detail.keys()),
-                        "delivery_groups_count": len(delivery_groups),
-                        "order_products_count": len(order_detail.get('orderProducts', [])),
-                        "sample_data": {k: str(v)[:200] + "..." if len(str(v)) > 200 else v for k, v in list(order_detail.items())[:5]}
-                    }
+                if not shopby_orders:
+                    result["errors"].append("처리할 주문이 없습니다")
                     return result
                 
-                # 3단계: 배송준비중 상태 변경 API 호출
-                print("=== 3단계: 배송준비중 상태 변경 API 호출 ===")
+                print(f"샵바이 주문 조회 완료: {len(shopby_orders)}개")
                 
-                async with ShopbyApiClient(config.shopby) as shopby_client:
-                    delivery_result = await shopby_client.prepare_delivery(order_option_nos)
+                # 2단계: 각 주문에 대해 배송준비중 상태 변경 테스트
+                print("=== 2단계: 배송준비중 상태 변경 테스트 ===")
+                
+                # 첫 번째 주문으로 테스트
+                test_order = shopby_orders[0] if isinstance(shopby_orders, list) else shopby_orders
+                order_no = test_order.get("orderNo", "UNKNOWN")
+                
+                print(f"테스트 주문: {order_no}")
+                print(f"주문 데이터 구조: {list(test_order.keys())}")
+                
+                # 주문 데이터 구조 디버깅
+                if "deliveryGroups" in test_order:
+                    delivery_groups = test_order["deliveryGroups"]
+                    print(f"배송 그룹 수: {len(delivery_groups)}")
+                    if delivery_groups:
+                        first_group = delivery_groups[0]
+                        print(f"첫 번째 배송 그룹 키들: {list(first_group.keys())}")
+                        if "orderProducts" in first_group:
+                            products = first_group["orderProducts"]
+                            print(f"주문 상품 수: {len(products)}")
+                            if products:
+                                first_product = products[0]
+                                print(f"첫 번째 상품 키들: {list(first_product.keys())}")
+                                if "orderProductOptions" in first_product:
+                                    options = first_product["orderProductOptions"]
+                                    print(f"상품 옵션 수: {len(options)}")
+                                    if options:
+                                        first_option = options[0]
+                                        print(f"첫 번째 옵션 키들: {list(first_option.keys())}")
+                
+                # 2-1단계: 주문 상세 조회를 통해 옵션 번호 추출
+                print("2-1. 주문 상세 조회 및 옵션 번호 추출...")
+                try:
+                    order_detail = await shopby_client.get_order_detail(order_no)
+                    print(f"✅ 주문 상세 조회 완료: {order_detail}")
+                    
+                    order_option_nos = []
+                    
+                    # 방법 1: deliveryGroups에서 찾기
+                    delivery_groups = order_detail.get('deliveryGroups', [])
+                    if delivery_groups:
+                        print(f"📦 deliveryGroups에서 옵션 번호 찾기 (길이: {len(delivery_groups)})")
+                        for i, delivery_group in enumerate(delivery_groups):
+                            print(f"  배송 그룹 {i+1} 키들: {list(delivery_group.keys())}")
+                            
+                            order_products = delivery_group.get('orderProducts', [])
+                            for j, product in enumerate(order_products):
+                                print(f"    상품 {j+1} 키들: {list(product.keys())}")
+                                
+                                order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
+                                for k, option in enumerate(order_options):
+                                    option_no = option.get('orderOptionNo')  # orderOptionNo 추출
+                                    if option_no is not None:
+                                        order_option_nos.append(option_no)
+                                        print(f"      옵션 {k+1}: {option_no}")
+                    
+                    # 방법 2: 직접 orderProducts에서 찾기
+                    if not order_option_nos:
+                        print(f"🔍 deliveryGroups가 없어서 직접 orderProducts에서 찾기")
+                        order_products = order_detail.get('orderProducts', [])
+                        if order_products:
+                            print(f"  orderProducts 길이: {len(order_products)}")
+                            for i, product in enumerate(order_products):
+                                print(f"    상품 {i+1} 키들: {list(product.keys())}")
+                                
+                                order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
+                                for j, option in enumerate(order_options):
+                                    option_no = option.get('orderOptionNo')  # orderOptionNo 추출
+                                    if option_no is not None:
+                                        order_option_nos.append(option_no)
+                                        print(f"      옵션 {j+1}: {option_no}")
+                
+                except Exception as e:
+                    import traceback
+                    error_detail = traceback.format_exc()
+                    print(f"❌ 주문 상세 조회 실패: {str(e)}")
+                    import traceback
+                    detail_traceback = traceback.format_exc()
+                    print(f"상세 오류: {detail_traceback}")
+                    
+                    result["test_results"].append({
+                        "order_no": order_no,
+                        "step": "option_extraction",
+                        "status": "failed",
+                        "message": f"주문 옵션 번호를 찾을 수 없음: {str(e)}",
+                        "extracted_options": [],
+                        "error_detail": error_detail,
+                        "order_detail_response": order_detail if 'order_detail' in locals() else None
+                    })
+                    return result
+                
+                # 2-2단계: 배송준비중 상태 변경 API 호출
+                print("2-2. 배송준비중 상태 변경 API 호출...")
+                delivery_result = await shopby_client.prepare_delivery(order_option_nos)
                 
                 test_result = {
-                    "order_no": target_order_no,
+                    "order_no": order_no,
                     "step": "delivery_status_update",
                     "extracted_options": order_option_nos,
                     "api_result": delivery_result
@@ -886,17 +874,6 @@ def test_shopby_delivery_status():
                     test_result["status"] = "failed"
                     test_result["message"] = delivery_result["message"]
                     test_result["error"] = delivery_result.get("error", "Unknown error")
-                    
-                    # 실패한 옵션 번호 정보 추가
-                    if "failed_option_no" in delivery_result:
-                        failed_option = delivery_result["failed_option_no"]
-                        print(f"  🔍 실패한 옵션 번호: {failed_option}")
-                        test_result["failed_option_no"] = failed_option
-                    
-                    # 샵바이 API 특성 안내
-                    if "note" in delivery_result:
-                        print(f"  📝 참고: {delivery_result['note']}")
-                        test_result["note"] = delivery_result["note"]
                 
                 result["test_results"].append(test_result)
                 
