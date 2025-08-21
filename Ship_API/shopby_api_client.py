@@ -440,15 +440,25 @@ class ShopbyApiClient:
             async with self.session.put(url, headers=headers, json=payload) as response:
                 print(f"  Response Status: {response.status}")
                 
-                if response.status == 200:
-                    result = await response.json()
-                    print(f"✅ 배송준비중 상태 변경 성공: {len(order_option_nos)}개 옵션")
-                    return {
-                        "status": "success",
-                        "message": f"{len(order_option_nos)}개 옵션을 배송준비중 상태로 변경했습니다.",
-                        "data": result,
-                        "processed_count": len(order_option_nos)
-                    }
+                if response.status == 200 or response.status == 204:
+                    # HTTP 200 또는 204는 모두 성공
+                    if response.status == 204:
+                        print(f"✅ 배송준비중 상태 변경 성공 (HTTP 204): {len(order_option_nos)}개 옵션")
+                        return {
+                            "status": "success",
+                            "message": f"{len(order_option_nos)}개 옵션을 배송준비중 상태로 변경했습니다. (HTTP 204)",
+                            "data": None,  # 204는 응답 본문이 없음
+                            "processed_count": len(order_option_nos)
+                        }
+                    else:
+                        result = await response.json()
+                        print(f"✅ 배송준비중 상태 변경 성공 (HTTP 200): {len(order_option_nos)}개 옵션")
+                        return {
+                            "status": "success",
+                            "message": f"{len(order_option_nos)}개 옵션을 배송준비중 상태로 변경했습니다.",
+                            "data": result,
+                            "processed_count": len(order_option_nos)
+                        }
                 else:
                     error_text = await response.text()
                     print(f"❌ 배송준비중 상태 변경 실패: {response.status}")
