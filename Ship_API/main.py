@@ -628,8 +628,7 @@ async def run_full_workflow_skip_cornerlogis() -> Dict[str, Any]:
     """
     코너로지스 전송을 건너뛰는 전체 워크플로우
     1. 샵바이 API 주문 처리 (조회, 변환)
-    2. 코너로지스 전송 건너뛰기
-    3. 샵바이 상태를 배송준비중으로 변경
+    2. 코너로지스 전송 단계 (실제 API 호출만 건너뛰기, 배송준비중 처리는 진행)
     """
     config = load_app_config()
     ensure_data_dirs(config.data_dir)
@@ -668,23 +667,18 @@ async def run_full_workflow_skip_cornerlogis() -> Dict[str, Any]:
         
         print("✅ 샵바이 주문 처리 완료")
         
-        # 2단계: 코너로지스 전송 건너뛰기
-        print("=== 코너로지스 전송 건너뛰기 ===")
-        print("⏭️ 코너로지스 전송이 건너뛰어졌습니다 (skip_cornerlogis=true)")
-        print("✅ 코너로지스 전송 건너뛰기 완료")
+        # 2단계: 코너로지스 전송 단계 (실제 API 호출만 건너뛰기, 배송준비중 처리는 진행)
+        print("=== 코너로지스 전송 단계 시작 (실제 전송은 건너뛰기) ===")
         
-        # 3단계: 샵바이 상태를 배송준비중으로 변경 (기존과 동일)
-        print("=== 샵바이 상태 변경 시작 ===")
-        
-        # 변환된 주문이 있는 경우에만 상태 변경 시도
+        # 변환된 주문이 있는 경우에만 처리
         transformed_orders = shopby_result.get("transformed_orders", [])
         if transformed_orders:
-            print(f"변환된 주문 {len(transformed_orders)}개에 대해 배송준비중 상태 변경 시도")
+            print(f"변환된 주문 {len(transformed_orders)}개에 대해 코너로지스 전송 단계 처리 (실제 전송은 건너뛰기)")
             
             async with ShopbyApiClient(config.shopby) as shopby_client:
                 for i, order in enumerate(transformed_orders):
                     order_no = order.get("orderNo", f"ORDER_{i+1}")
-                    print(f"주문 {i+1}/{len(transformed_orders)} 상태 변경 중: {order_no}")
+                    print(f"주문 {i+1}/{len(transformed_orders)} 처리 중: {order_no}")
                     
                     try:
                         # 주문 상세 조회를 통해 orderOptionNo 추출
@@ -702,7 +696,9 @@ async def run_full_workflow_skip_cornerlogis() -> Dict[str, Any]:
                                         order_option_nos.append(option_no)
                         
                         if order_option_nos:
-                            # 배송준비중 상태 변경
+                            print(f"  ✅ 추출된 orderOptionNo: {order_option_nos}")
+                            
+                            # 배송준비중 상태 변경 (코너로지스 전송과 동일한 로직)
                             delivery_result = await shopby_client.prepare_delivery(order_option_nos)
                             
                             if delivery_result["status"] == "success":
@@ -733,21 +729,21 @@ async def run_full_workflow_skip_cornerlogis() -> Dict[str, Any]:
                             })
                             
                     except Exception as e:
-                        print(f"❌ 주문 {order_no} 상태 변경 중 오류: {str(e)}")
+                        print(f"❌ 주문 {order_no} 처리 중 오류: {str(e)}")
                         result["cornerlogis_result"]["processed_orders"].append({
                             "orderNo": order_no,
                             "status": "error",
-                            "message": f"상태 변경 중 오류: {str(e)}",
+                            "message": f"처리 중 오류: {str(e)}",
                             "extracted_options": []
                         })
                     
                     # API 호출 간격 조절
                     if i < len(transformed_orders) - 1:
                         await asyncio.sleep(1)
+            
+            print("✅ 코너로지스 전송 단계 완료 (실제 전송은 건너뛰었지만 배송준비중 처리는 완료)")
         else:
-            print("변환된 주문이 없어서 상태 변경을 건너뜁니다.")
-        
-        print("✅ 샵바이 상태 변경 완료")
+            print("변환된 주문이 없어서 코너로지스 전송 단계를 건너뜁니다.")
         
         # 워크플로우 완료
         result["status"] = "completed"
