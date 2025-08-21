@@ -764,6 +764,190 @@ async def run_full_workflow_skip_cornerlogis() -> Dict[str, Any]:
         return result
 
 
+async def process_cornerlogis_upload_test(config) -> Dict[str, Any]:
+    """
+    테스트용: 코너로지스 개발 API로 출고 업로드
+    """
+    ensure_data_dirs(config.data_dir)
+    
+    result = {
+        "start_time": datetime.now().isoformat(),
+        "status": "started",
+        "cornerlogis_success_count": 0,
+        "cornerlogis_failure_count": 0,
+        "errors": [],
+        "processed_orders": []
+    }
+    
+    try:
+        print("=== 코너로지스 개발 API 출고 업로드 시작 ===")
+        
+        # 1. 1시에 저장된 샵바이 주문 데이터 로드
+        print("1. 샵바이 주문 데이터 로드 중...")
+        shopby_orders, sku_mapping = await load_shopby_orders(config)
+        
+        if not shopby_orders:
+            print("업로드할 주문 데이터가 없습니다.")
+            result["status"] = "completed"
+            result["end_time"] = datetime.now().isoformat()
+            return result
+        
+        print(f"로드된 주문 수: {len(shopby_orders)}개")
+        
+        # 2. 코너로지스 개발 API로 전송
+        print("2. 코너로지스 개발 API로 주문 전송 중...")
+        
+        async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client, \
+                  ShopbyApiClient(config.shopby) as shopby_client:
+            # 샵바이 API 응답 구조 처리
+            if isinstance(shopby_orders, list) and len(shopby_orders) > 0:
+                if isinstance(shopby_orders[0], dict) and 'contents' in shopby_orders[0]:
+                    # API 응답에서 실제 주문 데이터 추출
+                    actual_orders = shopby_orders[0]['contents']
+                else:
+                    actual_orders = shopby_orders
+            else:
+                actual_orders = shopby_orders
+                
+            # 개별 주문 처리
+            for i, shopby_order in enumerate(actual_orders):
+                order_no = shopby_order.get("orderNo", f"ORDER_{i+1}")
+                
+                try:
+                    print(f"주문 처리 중: {order_no} ({i+1}/{len(actual_orders)})")
+                    
+                    # 샵바이 주문 데이터를 올바른 형식으로 변환
+                    enhanced_order = prepare_shopby_order_for_cornerlogis(shopby_order)
+                    
+                    # 코너로지스 출고 데이터로 변환
+                    outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
+                    
+                    if not outbound_data_list:
+                        error_msg = f"주문 {order_no}: 변환할 상품이 없습니다"
+                        print(error_msg)
+                        result["errors"].append(error_msg)
+                        result["cornerlogis_failure_count"] += 1
+                        continue
+                    
+                    # 코너로지스 개발 API 호출 (배열로 전송)
+                    cornerlogis_result = await cornerlogis_client.create_outbound_order(outbound_data_list)
+                    
+                    if cornerlogis_result:
+                        print(f"주문 {order_no} 처리 성공 ({len(outbound_data_list)}개 상품)")
+                        result["cornerlogis_success_count"] += 1
+                        result["processed_orders"].append({
+                            "orderNo": order_no,
+                            "status": "success",
+                            "items_count": len(outbound_data_list),
+                            "cornerlogis_result": cornerlogis_result
+                        })
+                        
+                        # 3. 코너로지스 출고 성공 후 샵바이 상태를 배송준비중으로 변경
+                        try:
+                            print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
+                            
+                            # 주문 상세 조회를 통해 orderOptionNo 추출 (orderProducts에서 직접 찾기)
+                            order_detail = await shopby_client.get_order_detail(order_no)
+                            order_option_nos = []
+                            
+                            # orderProducts에서 직접 orderOptions 찾기 (deliveryGroups 사용하지 않음)
+                            order_products = order_detail.get('orderProducts', [])
+                            if order_products:
+                                print(f"  📦 orderProducts에서 orderOptionNo 찾기 (길이: {len(order_products)})")
+                                for i, product in enumerate(order_products):
+                                    print(f"    상품 {i+1}: {product.get('productName', 'UNKNOWN')}")
+                                    
+                                    order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
+                                    for j, option in enumerate(order_options):
+                                        option_no = option.get('orderOptionNo')  # orderOptionNo 추출
+                                        if option_no is not None:
+                                            order_option_nos.append(option_no)
+                                            print(f"      옵션 {j+1}: {option_no}")
+                            
+                            if order_option_nos:
+                                print(f"  ✅ 추출된 orderOptionNo: {order_option_nos}")
+                                # 샵바이 API로 배송준비중 상태 변경
+                                delivery_result = await shopby_client.prepare_delivery(order_option_nos)
+                                
+                                if delivery_result["status"] == "success":
+                                    print(f"✅ 주문 {order_no} 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")
+                                    result["processed_orders"][-1]["shopby_status_update"] = {
+                                        "status": "success",
+                                        "message": delivery_result["message"],
+                                        "processed_options": delivery_result["processed_count"]
+                                    }
+                                else:
+                                    print(f"⚠️ 주문 {order_no} 배송준비중 상태 변경 실패: {delivery_result['message']}")
+                                    result["processed_orders"][-1]["shopby_status_update"] = {
+                                        "status": "failed",
+                                        "message": delivery_result["message"],
+                                        "error": delivery_result.get("error", "Unknown error")
+                                    }
+                            else:
+                                print(f"⚠️ 주문 {order_no}에서 주문 옵션 번호를 찾을 수 없습니다.")
+                                result["processed_orders"][-1]["shopby_status_update"] = {
+                                    "status": "skipped",
+                                    "message": "주문 옵션 번호를 찾을 수 없음"
+                                }
+                                
+                        except Exception as e:
+                            print(f"❌ 주문 {order_no} 샵바이 상태 변경 중 오류: {str(e)}")
+                            result["processed_orders"][-1]["shopby_status_update"] = {
+                                "status": "error",
+                                "message": f"상태 변경 중 오류: {str(e)}"
+                            }
+                    else:
+                        error_msg = f"주문 {order_no} 코너로지스 개발 API 호출 실패"
+                        print(error_msg)
+                        result["errors"].append(error_msg)
+                        result["cornerlogis_failure_count"] += 1
+                        result["processed_orders"].append({
+                            "orderNo": order_no,
+                            "status": "failed",
+                            "error": "API 호출 실패"
+                        })
+                    
+                    # API 호출 간격 조절
+                    if i < len(actual_orders) - 1:
+                        await asyncio.sleep(1)
+                        
+                except Exception as e:
+                    error_msg = f"주문 {order_no} 처리 중 오류: {str(e)}"
+                    print(error_msg)
+                    result["errors"].append(error_msg)
+                    result["cornerlogis_failure_count"] += 1
+                    result["processed_orders"].append({
+                        "orderNo": order_no,
+                        "status": "error",
+                        "error": str(e)
+                    })
+        
+        # 3. 결과 저장
+        await save_cornerlogis_result(config, result)
+        
+        result["status"] = "completed"
+        result["end_time"] = datetime.now().isoformat()
+        
+        print("=== 코너로지스 개발 API 업로드 완료 ===")
+        print(f"코너로지스 전송 성공: {result['cornerlogis_success_count']}")
+        print(f"코너로지스 전송 실패: {result['cornerlogis_failure_count']}")
+        
+        if result["errors"]:
+            print(f"오류 수: {len(result['errors'])}")
+            for error in result["errors"][:3]:  # 최대 3개만 출력
+                print(f"  - {error}")
+        
+        return result
+        
+    except Exception as e:
+        error_msg = f"코너로지스 개발 API 업로드 중 치명적 오류: {str(e)}"
+        print(error_msg)
+        result["status"] = "failed"
+        result["errors"].append(error_msg)
+        result["end_time"] = datetime.now().isoformat()
+        return result
+
+
 # CLI 인터페이스
 async def main():
     """메인 함수"""
@@ -874,202 +1058,84 @@ async def run_full_workflow():
         }
 
 
-async def run_full_workflow_test():
-    """테스트 데이터로 전체 워크플로우 실행"""
-    print("=" * 80)
-    print("🧪 테스트 워크플로우 실행 (더미 데이터)")
-    print("=" * 80)
-    
+async def run_full_workflow_test() -> Dict[str, Any]:
+    """
+    테스트용: 코너로지스 개발 API 강제 사용
+    1. 샵바이 API 주문 처리
+    2. 코너로지스 개발 API로 전송
+    3. 샵바이 상태를 배송준비중으로 변경
+    """
     config = load_app_config()
     ensure_data_dirs(config.data_dir)
+    
+    # 코너로지스 개발 API 설정으로 강제 오버라이드
+    config.cornerlogis.base_url = "https://devapi.cornerlogis.com"
+    config.cornerlogis.api_key = "DSAGJOPcj2CSANIVOAF1FO"
+    
+    print("🧪 테스트 모드: 코너로지스 개발 API 설정 적용")
+    print(f"🌐 API URL: {config.cornerlogis.base_url}")
+    print(f"🔑 API Key: {config.cornerlogis.api_key}")
     
     result = {
         "start_time": datetime.now().isoformat(),
         "status": "started",
-        "test_orders_count": 0,
-        "cornerlogis_success_count": 0,
-        "cornerlogis_failure_count": 0,
-        "errors": [],
-        "processed_orders": []
+        "shopby_result": None,
+        "cornerlogis_result": None,
+        "end_time": None,
+        "test_mode": True,
+        "cornerlogis_api": config.cornerlogis.base_url
     }
     
     try:
-        print("=== 테스트 데이터로 코너로지스 업로드 테스트 ===")
+        print("================================================================================")
+        print("🧪 테스트 모드 - 코너로지스 개발 API 강제 사용")
+        print("================================================================================")
         
-        # 1. 테스트 주문 데이터 로드
-        print("1. 테스트 주문 데이터 로드 중...")
-        from test_data_generator import create_test_orders_list
+        # 1단계: 샵바이 API 주문 처리
+        print("=== 1단계: 샵바이 API 주문 처리 시작 ===")
+        shopby_result = await process_shopby_orders()
+        result["shopby_result"] = shopby_result
         
-        test_orders_response = create_test_orders_list()
-        if test_orders_response and len(test_orders_response) > 0:
-            test_orders = test_orders_response[0]['contents']
-        else:
-            test_orders = []
-        
-        result["test_orders_count"] = len(test_orders)
-        print(f"테스트 주문 로드 완료: {len(test_orders)}개 주문")
-        
-        if not test_orders:
-            print("테스트할 주문 데이터가 없습니다.")
-            result["status"] = "completed"
+        if shopby_result["status"] != "completed":
+            error_msg = f"샵바이 주문 처리 실패: {shopby_result.get('message', 'Unknown error')}"
+            print(error_msg)
+            result["status"] = "failed"
+            result["errors"] = shopby_result.get("errors", [error_msg])
             result["end_time"] = datetime.now().isoformat()
             return result
         
-        # 주문 상세 출력
-        for i, order in enumerate(test_orders, 1):
-            print(f"  주문 {i}: {order['orderNo']}")
-            for item in order['items']:
-                print(f"    - 상품코드: {item['productManagementCd']}, 상품명: {item['productName']}, 수량: {item['quantity']}")
+        print("✅ 샵바이 주문 처리 완료")
         
-        # 2. SKU 매핑 로드
-        print("2. SKU 매핑 로드 중...")
-        sku_mapping = get_sku_mapping(config)
-        print(f"SKU 매핑 로드 완료: {len(sku_mapping)}개 항목")
+        # 2단계: 코너로지스 개발 API로 전송
+        print("=== 2단계: 코너로지스 개발 API로 전송 ===")
+        cornerlogis_result = await process_cornerlogis_upload_test(config)
+        result["cornerlogis_result"] = cornerlogis_result
         
-        # 3. 코너로지스 API로 전송
-        print("3. 코너로지스 API로 테스트 주문 전송 중...")
+        if cornerlogis_result["status"] != "completed":
+            error_msg = f"코너로지스 전송 실패: {cornerlogis_result.get('message', 'Unknown error')}"
+            print(error_msg)
+            result["status"] = "failed"
+            result["errors"] = cornerlogis_result.get("errors", [error_msg])
+            result["end_time"] = datetime.now().isoformat()
+            return result
         
-        async with CornerlogisApiClient(config.cornerlogis) as cornerlogis_client:
-            # 개별 주문 처리
-            for i, shopby_order in enumerate(test_orders):
-                order_no = shopby_order.get("orderNo", f"TEST_ORDER_{i+1}")
-                
-                try:
-                    print(f"주문 처리 중: {order_no} ({i+1}/{len(test_orders)})")
-                    
-                    # 샵바이 주문 데이터를 올바른 형식으로 변환
-                    enhanced_order = prepare_shopby_order_for_cornerlogis(shopby_order)
-                    
-                    # 코너로지스 출고 데이터로 변환
-                    outbound_data_list = await cornerlogis_client.prepare_outbound_data(enhanced_order, sku_mapping)
-                    
-                    if not outbound_data_list:
-                        error_msg = f"주문 {order_no}: 변환할 상품이 없습니다"
-                        print(error_msg)
-                        result["errors"].append(error_msg)
-                        result["cornerlogis_failure_count"] += 1
-                        continue
-                    
-                    print(f"  → 변환된 상품 수: {len(outbound_data_list)}")
-                    for outbound_data in outbound_data_list:
-                        print(f"    - 상품코드: {outbound_data.get('goodsCode', 'N/A')}, goodsId: {outbound_data.get('goodsId', 'N/A')}")
-                    
-                    # 코너로지스 API 호출 (배열로 전송)
-                    cornerlogis_result = await cornerlogis_client.create_outbound_order(outbound_data_list)
-                    
-                    if cornerlogis_result:
-                        print(f"주문 {order_no} 처리 성공 ({len(outbound_data_list)}개 상품)")
-                        result["cornerlogis_success_count"] += 1
-                        result["processed_orders"].append({
-                            "orderNo": order_no,
-                            "status": "success",
-                            "items_count": len(outbound_data_list),
-                            "cornerlogis_result": cornerlogis_result,
-                            "test_product_codes": [item['productManagementCd'] for item in enhanced_order.get('items', [])]
-                        })
-                        
-                        # 3. 코너로지스 출고 성공 후 샵바이 상태를 배송준비중으로 변경
-                        try:
-                            print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
-                            
-                            # 주문 상세 조회를 통해 옵션 번호 추출 (orderProducts에서 직접 찾기)
-                            order_detail = await shopby_client.get_order_detail(order_no)
-                            order_option_nos = []
-                            
-                            # orderProducts에서 직접 orderOptions 찾기 (deliveryGroups 사용하지 않음)
-                            order_products = order_detail.get('orderProducts', [])
-                            if order_products:
-                                print(f"  📦 orderProducts에서 orderOptionNo 찾기 (길이: {len(order_products)})")
-                                for i, product in enumerate(order_products):
-                                    print(f"    상품 {i+1}: {product.get('productName', 'UNKNOWN')}")
-                                    
-                                    order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
-                                    for j, option in enumerate(order_options):
-                                        option_no = option.get('orderOptionNo')  # orderOptionNo 추출
-                                        if option_no is not None:
-                                            order_option_nos.append(option_no)
-                                            print(f"      옵션 {j+1}: {option_no}")
-                            
-                            if order_option_nos:
-                                print(f"  ✅ 추출된 orderOptionNo: {order_option_nos}")
-                                # 샵바이 API로 배송준비중 상태 변경
-                                delivery_result = await shopby_client.prepare_delivery(order_option_nos)
-                                
-                                if delivery_result["status"] == "success":
-                                    print(f"✅ 주문 {order_no} 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")
-                                    result["processed_orders"][-1]["shopby_status_update"] = {
-                                        "status": "success",
-                                        "message": delivery_result["message"],
-                                        "processed_options": delivery_result["processed_count"]
-                                    }
-                                else:
-                                    print(f"⚠️ 주문 {order_no} 배송준비중 상태 변경 실패: {delivery_result['message']}")
-                                    result["processed_orders"][-1]["shopby_status_update"] = {
-                                        "status": "failed",
-                                        "message": delivery_result["message"],
-                                        "error": delivery_result.get("error", "Unknown error")
-                                    }
-                            else:
-                                print(f"⚠️ 주문 {order_no}에서 주문 옵션 번호를 찾을 수 없습니다.")
-                                result["processed_orders"][-1]["shopby_status_update"] = {
-                                    "status": "skipped",
-                                    "message": "주문 옵션 번호를 찾을 수 없음"
-                                }
-                                
-                        except Exception as e:
-                            print(f"❌ 주문 {order_no} 샵바이 상태 변경 중 오류: {str(e)}")
-                            result["processed_orders"][-1]["shopby_status_update"] = {
-                                "status": "error",
-                                "message": f"상태 변경 중 오류: {str(e)}"
-                            }
-                    else:
-                        error_msg = f"주문 {order_no} 코너로지스 API 호출 실패"
-                        print(error_msg)
-                        result["errors"].append(error_msg)
-                        result["cornerlogis_failure_count"] += 1
-                        result["processed_orders"].append({
-                            "orderNo": order_no,
-                            "status": "failed",
-                            "error": "API 호출 실패",
-                            "test_product_codes": [item['productManagementCd'] for item in enhanced_order.get('items', [])]
-                        })
-                    
-                    # API 호출 간격 조절
-                    if i < len(test_orders) - 1:
-                        await asyncio.sleep(1)
-                        
-                except Exception as e:
-                    error_msg = f"주문 {order_no} 처리 중 오류: {str(e)}"
-                    print(error_msg)
-                    result["errors"].append(error_msg)
-                    result["cornerlogis_failure_count"] += 1
-                    result["processed_orders"].append({
-                        "orderNo": order_no,
-                        "status": "error",
-                        "error": str(e),
-                        "test_product_codes": [item['productManagementCd'] for item in shopby_order.get('items', [])]
-                    })
+        print("✅ 코너로지스 개발 API 전송 완료")
         
+        # 워크플로우 완료
         result["status"] = "completed"
         result["end_time"] = datetime.now().isoformat()
         
-        print("=== 테스트 워크플로우 완료 ===")
-        print(f"테스트 주문 수: {result['test_orders_count']}")
-        print(f"코너로지스 전송 성공: {result['cornerlogis_success_count']}")
-        print(f"코너로지스 전송 실패: {result['cornerlogis_failure_count']}")
-        
-        if result["errors"]:
-            print(f"오류 수: {len(result['errors'])}")
-            for error in result["errors"][:3]:  # 최대 3개만 출력
-                print(f"  - {error}")
+        print("================================================================================")
+        print("🎯 테스트 모드 - 코너로지스 개발 API 워크플로우 완료")
+        print("================================================================================")
         
         return result
         
     except Exception as e:
-        error_msg = f"테스트 워크플로우 중 치명적 오류: {str(e)}"
+        error_msg = f"테스트 모드 워크플로우 중 치명적 오류: {str(e)}"
         print(error_msg)
         result["status"] = "failed"
-        result["errors"].append(error_msg)
+        result["errors"] = [error_msg]
         result["end_time"] = datetime.now().isoformat()
         return result
 
