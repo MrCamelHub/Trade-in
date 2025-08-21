@@ -38,7 +38,7 @@ def prepare_shopby_order_for_cornerlogis(shopby_order: Dict[str, Any]) -> Dict[s
     # 상품 정보 추출
     items = []
     for product in delivery_group.get('orderProducts', []):
-        for option in product.get('orderOptions', []):  # 코너로지스 전송용: orderOptions 사용
+        for option in product.get('orderProductOptions', []):  # 코너로지스 전송용: orderProductOptions 사용
             print(f"    상품 {product.get('productName', 'UNKNOWN')}: {option.get('productName', 'UNKNOWN')}")
             print(f"      상품 키들: {list(product.keys())}")
             

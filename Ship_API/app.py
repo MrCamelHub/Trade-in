@@ -797,7 +797,7 @@ def test_shopby_delivery_status():
                 print("2-1. 주문 상세 조회 및 옵션 번호 추출...")
                 try:
                     order_detail = await shopby_client.get_order_detail(order_no)
-                    print(f"✅ 주문 상세 조회 완료: {order_detail}")
+                    print(f"✅ 주문 상세 조회 완료")
                     
                     order_option_nos = []
                     
@@ -834,14 +834,19 @@ def test_shopby_delivery_status():
                                     if option_no is not None:
                                         order_option_nos.append(option_no)
                                         print(f"      옵션 {j+1}: {option_no}")
-                
+                    
+                    print(f"✅ 옵션 번호 추출 완료: {len(order_option_nos)}개 - {order_option_nos}")
+                    
+                    if not order_option_nos:
+                        print(f"❌ 주문 {order_no}에서 옵션 번호를 찾을 수 없습니다.")
+                        result["errors"].append("옵션 번호를 찾을 수 없습니다")
+                        return result
+                        
                 except Exception as e:
                     import traceback
                     error_detail = traceback.format_exc()
                     print(f"❌ 주문 상세 조회 실패: {str(e)}")
-                    import traceback
-                    detail_traceback = traceback.format_exc()
-                    print(f"상세 오류: {detail_traceback}")
+                    print(f"상세 오류: {error_detail}")
                     
                     result["test_results"].append({
                         "order_no": order_no,
@@ -849,8 +854,7 @@ def test_shopby_delivery_status():
                         "status": "failed",
                         "message": f"주문 옵션 번호를 찾을 수 없음: {str(e)}",
                         "extracted_options": [],
-                        "error_detail": error_detail,
-                        "order_detail_response": order_detail if 'order_detail' in locals() else None
+                        "error_detail": error_detail
                     })
                     return result
                 
