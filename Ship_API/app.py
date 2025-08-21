@@ -997,27 +997,31 @@ async def run_delivery_status_only():
     2. 각 주문의 orderOptionNo 추출
     3. 배송준비중 상태로 변경
     """
-    config = load_app_config()
-    ensure_data_dirs(config.data_dir)
-    
-    result = {
-        "status": "started",
-        "timestamp": datetime.now().isoformat(),
-        "start_time": datetime.now().isoformat(),
-        "shopby_result": {
-            "status": "started",
-            "start_time": datetime.now().isoformat(),
-            "shopby_orders_count": 0,
-            "transformed_orders_count": 0,
-            "delivery_status_updated_count": 0,
-            "delivery_status_failed_count": 0,
-            "errors": [],
-            "processed_orders": []
-        },
-        "end_time": None
-    }
-    
     try:
+        from config import load_app_config
+        from main import ensure_data_dirs
+        from shopby_api_client import ShopbyApiClient
+        
+        config = load_app_config()
+        ensure_data_dirs(config.data_dir)
+        
+        result = {
+            "status": "started",
+            "timestamp": datetime.now().isoformat(),
+            "start_time": datetime.now().isoformat(),
+            "shopby_result": {
+                "status": "started",
+                "start_time": datetime.now().isoformat(),
+                "shopby_orders_count": 0,
+                "transformed_orders_count": 0,
+                "delivery_status_updated_count": 0,
+                "delivery_status_failed_count": 0,
+                "errors": [],
+                "processed_orders": []
+            },
+            "end_time": None
+        }
+        
         print("=== 배송준비중 상태 변경 전용 워크플로우 실행 ===")
         
         # 1단계: 샵바이 최근 주문 조회
