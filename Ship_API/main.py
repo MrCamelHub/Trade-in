@@ -290,10 +290,26 @@ async def process_cornerlogis_upload() -> Dict[str, Any]:
                         try:
                             print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
                             
-                            # 주문 상세 조회를 통해 옵션 번호 추출
-                            order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
+                            # 주문 상세 조회를 통해 옵션 번호 추출 (orderProducts에서 직접 찾기)
+                            order_detail = await shopby_client.get_order_detail(order_no)
+                            order_option_nos = []
+                            
+                            # orderProducts에서 직접 orderOptions 찾기 (deliveryGroups 사용하지 않음)
+                            order_products = order_detail.get('orderProducts', [])
+                            if order_products:
+                                print(f"  📦 orderProducts에서 orderOptionNo 찾기 (길이: {len(order_products)})")
+                                for i, product in enumerate(order_products):
+                                    print(f"    상품 {i+1}: {product.get('productName', 'UNKNOWN')}")
+                                    
+                                    order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
+                                    for j, option in enumerate(order_options):
+                                        option_no = option.get('orderOptionNo')  # orderOptionNo 추출
+                                        if option_no is not None:
+                                            order_option_nos.append(option_no)
+                                            print(f"      옵션 {j+1}: {option_no}")
                             
                             if order_option_nos:
+                                print(f"  ✅ 추출된 orderOptionNo: {order_option_nos}")
                                 # 샵바이 API로 배송준비중 상태 변경
                                 delivery_result = await shopby_client.prepare_delivery(order_option_nos)
                                 
@@ -816,10 +832,26 @@ async def run_full_workflow_test():
                         try:
                             print(f"3. 주문 {order_no} 샵바이 상태를 배송준비중으로 변경 중...")
                             
-                            # 주문 상세 조회를 통해 옵션 번호 추출
-                            order_option_nos = await shopby_client.extract_order_option_nos_from_detail(order_no)
+                            # 주문 상세 조회를 통해 옵션 번호 추출 (orderProducts에서 직접 찾기)
+                            order_detail = await shopby_client.get_order_detail(order_no)
+                            order_option_nos = []
+                            
+                            # orderProducts에서 직접 orderOptions 찾기 (deliveryGroups 사용하지 않음)
+                            order_products = order_detail.get('orderProducts', [])
+                            if order_products:
+                                print(f"  📦 orderProducts에서 orderOptionNo 찾기 (길이: {len(order_products)})")
+                                for i, product in enumerate(order_products):
+                                    print(f"    상품 {i+1}: {product.get('productName', 'UNKNOWN')}")
+                                    
+                                    order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
+                                    for j, option in enumerate(order_options):
+                                        option_no = option.get('orderOptionNo')  # orderOptionNo 추출
+                                        if option_no is not None:
+                                            order_option_nos.append(option_no)
+                                            print(f"      옵션 {j+1}: {option_no}")
                             
                             if order_option_nos:
+                                print(f"  ✅ 추출된 orderOptionNo: {order_option_nos}")
                                 # 샵바이 API로 배송준비중 상태 변경
                                 delivery_result = await shopby_client.prepare_delivery(order_option_nos)
                                 
