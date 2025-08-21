@@ -249,5 +249,29 @@ def start_scheduler():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    # 스케줄러 자동 시작
+    try:
+        import threading
+        import asyncio
+        
+        def start_scheduler_background():
+            """백그라운드에서 스케줄러 시작"""
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                from scheduler import run_continuous_scheduler
+                loop.run_until_complete(run_continuous_scheduler())
+            except Exception as e:
+                print(f"❌ 스케줄러 백그라운드 실행 오류: {e}")
+        
+        # 백그라운드에서 스케줄러 시작
+        scheduler_thread = threading.Thread(target=start_scheduler_background, daemon=True)
+        scheduler_thread.start()
+        print(f"🚀 스케줄러가 백그라운드에서 시작되었습니다 (Thread ID: {scheduler_thread.ident})")
+        
+    except Exception as e:
+        print(f"❌ 스케줄러 시작 실패: {e}")
+    
+    # Flask 앱 시작
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
