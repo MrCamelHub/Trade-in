@@ -980,13 +980,13 @@ def check_schedule():
             },
             "schedule": {
                 "shopby": {
-                    "time": "13:00 KST (04:00 UTC)",
+                    "time": "12:00 KST (03:00 UTC)",
                     "days": "평일 (월-금)",
                     "next_run": next_shopby,
                     "description": "샵바이 주문 조회"
                 },
                 "cornerlogis": {
-                    "time": "13:30 KST (04:30 UTC)",
+                    "time": "12:59 KST (03:59 UTC)",
                     "days": "평일 (월-금)",
                     "next_run": next_cornerlogis,
                     "description": "코너로지스 업로드"
@@ -1007,47 +1007,47 @@ if __name__ == '__main__':
     import pytz
     
     def run_shopby_schedule():
-        """13:00 KST에 샵바이 주문 조회 실행"""
+        """12:00 KST에 샵바이 주문 조회 실행"""
         try:
-            print(f"[{datetime.now().isoformat()}] 🕐 13:00 KST 스케줄 실행: 샵바이 주문 조회")
+            print(f"[{datetime.now().isoformat()}] 🕐 12:00 KST 스케줄 실행: 샵바이 주문 조회")
             from main import process_shopby_orders
             result = asyncio.run(process_shopby_orders())
-            print(f"[{datetime.now().isoformat()}] ✅ 13:00 KST 스케줄 완료: {result.get('status', 'unknown')}")
+            print(f"[{datetime.now().isoformat()}] ✅ 12:00 KST 스케줄 완료: {result.get('status', 'unknown')}")
         except Exception as e:
-            print(f"[{datetime.now().isoformat()}] ❌ 13:00 KST 스케줄 오류: {str(e)}")
+            print(f"[{datetime.now().isoformat()}] ❌ 12:00 KST 스케줄 오류: {str(e)}")
     
     def run_cornerlogis_schedule():
-        """13:30 KST에 코너로지스 업로드 실행"""
+        """12:59 KST에 코너로지스 업로드 실행"""
         try:
-            print(f"[{datetime.now().isoformat()}] 🕐 13:30 KST 스케줄 실행: 코너로지스 업로드")
+            print(f"[{datetime.now().isoformat()}] 🕐 12:59 KST 스케줄 실행: 코너로지스 업로드")
             from main import process_cornerlogis_upload
             result = asyncio.run(process_cornerlogis_upload())
-            print(f"[{datetime.now().isoformat()}] ✅ 13:30 KST 스케줄 완료: {result.get('status', 'unknown')}")
+            print(f"[{datetime.now().isoformat()}] ✅ 12:59 KST 스케줄 완료: {result.get('status', 'unknown')}")
         except Exception as e:
-            print(f"[{datetime.now().isoformat()}] ❌ 13:30 KST 스케줄 오류: {str(e)}")
+            print(f"[{datetime.now().isoformat()}] ❌ 12:59 KST 스케줄 오류: {str(e)}")
     
     def start_scheduler():
         """백그라운드에서 스케줄러 실행"""
         # KST 시간대 설정
         kst = pytz.timezone('Asia/Seoul')
         
-        # 평일 13:00 KST (UTC 04:00) - 샵바이 주문 조회
-        schedule.every().monday.at("04:00").do(run_shopby_schedule)
-        schedule.every().tuesday.at("04:00").do(run_shopby_schedule)
-        schedule.every().wednesday.at("04:00").do(run_shopby_schedule)
-        schedule.every().thursday.at("04:00").do(run_shopby_schedule)
-        schedule.every().friday.at("04:00").do(run_shopby_schedule)
+        # 평일 12:00 KST (UTC 03:00) - 샵바이 주문 조회
+        schedule.every().monday.at("03:00").do(run_shopby_schedule)
+        schedule.every().tuesday.at("03:00").do(run_shopby_schedule)
+        schedule.every().wednesday.at("03:00").do(run_shopby_schedule)
+        schedule.every().thursday.at("03:00").do(run_shopby_schedule)
+        schedule.every().friday.at("03:00").do(run_shopby_schedule)
         
-        # 평일 13:30 KST (UTC 04:30) - 코너로지스 업로드
-        schedule.every().monday.at("04:30").do(run_cornerlogis_schedule)
-        schedule.every().tuesday.at("04:30").do(run_cornerlogis_schedule)
-        schedule.every().wednesday.at("04:30").do(run_cornerlogis_schedule)
-        schedule.every().thursday.at("04:30").do(run_cornerlogis_schedule)
-        schedule.every().friday.at("04:30").do(run_cornerlogis_schedule)
+        # 평일 12:59 KST (UTC 03:59) - 코너로지스 업로드
+        schedule.every().monday.at("03:59").do(run_cornerlogis_schedule)
+        schedule.every().tuesday.at("03:59").do(run_cornerlogis_schedule)
+        schedule.every().wednesday.at("03:59").do(run_cornerlogis_schedule)
+        schedule.every().thursday.at("03:59").do(run_cornerlogis_schedule)
+        schedule.every().friday.at("03:59").do(run_cornerlogis_schedule)
         
         print(f"[{datetime.now().isoformat()}] 🚀 스케줄러 시작됨")
-        print(f"[{datetime.now().isoformat()}] 📅 평일 13:00 KST - 샵바이 주문 조회")
-        print(f"[{datetime.now().isoformat()}] 📅 평일 13:30 KST - 코너로지스 업로드")
+        print(f"[{datetime.now().isoformat()}] 📅 평일 12:00 KST - 샵바이 주문 조회")
+        print(f"[{datetime.now().isoformat()}] 📅 평일 12:59 KST - 코너로지스 업로드")
         
         while True:
             schedule.run_pending()

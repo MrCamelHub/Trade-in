@@ -27,8 +27,8 @@ PORT = "8000"
 name = "ship-shopby-scheduler"
 
 [services.schedule]
-# 매일 평일 13:00 (Asia/Seoul) - 샵바이 주문 조회
-cron = "0 4 * * 1-5"  # UTC 04:00 = KST 13:00
+# 매일 평일 12:00 (Asia/Seoul) - 샵바이 주문 조회
+cron = "0 3 * * 1-5"  # UTC 03:00 = KST 12:00
 command = "cd Ship_API && python -m main schedule-shopby"
 
 [services.variables]
@@ -40,8 +40,8 @@ PYTHONPATH = "./Ship_API"
 name = "ship-cornerlogis-scheduler"
 
 [services.schedule]
-# 매일 평일 13:30 (Asia/Seoul) - 코너로지스 업로드
-cron = "30 4 * * 1-5"  # UTC 04:30 = KST 13:30
+# 매일 평일 12:59 (Asia/Seoul) - 코너로지스 업로드
+cron = "59 3 * * 1-5"  # UTC 03:59 = KST 12:59
 command = "cd Ship_API && python -m main schedule-cornerlogis"
 
 [services.variables]

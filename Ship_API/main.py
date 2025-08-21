@@ -530,8 +530,8 @@ def should_run_shopby_now_kst() -> bool:
     if now.date() in kr_holidays:
         return False
     
-    # 13시 확인 (13:00-13:59)
-    if now.hour != 13:
+    # 12시 확인 (12:00-12:59)
+    if now.hour != 12:
         return False
     
     return True
@@ -554,15 +554,15 @@ def should_run_cornerlogis_now_kst() -> bool:
     if now.date() in kr_holidays:
         return False
     
-    # 13:30 확인 (13:30-13:59)
-    if now.hour != 13 or now.minute < 30:
+    # 12:59 확인 (12:59만)
+    if now.hour != 12 or now.minute != 59:
         return False
     
     return True
 
 
 async def scheduled_shopby_run():
-    """샵바이 주문 조회 스케줄 실행 (평일 13:00)"""
+    """샵바이 주문 조회 스케줄 실행 (평일 12:00)"""
     print(f"샵바이 스케줄 체크: {datetime.now()}")
     
     if should_run_shopby_now_kst():
@@ -572,12 +572,12 @@ async def scheduled_shopby_run():
     else:
         kst = pytz.timezone("Asia/Seoul")
         now = datetime.now(kst)
-        print(f"⏰ 실행 조건 불만족 - {now} (평일 13시만 실행)")
+        print(f"⏰ 실행 조건 불만족 - {now} (평일 12시만 실행)")
         return {"status": "skipped", "reason": "shopby_schedule_condition_not_met", "time": now.isoformat()}
 
 
 async def scheduled_cornerlogis_run():
-    """코너로지스 업로드 스케줄 실행 (평일 13:30)"""
+    """코너로지스 업로드 스케줄 실행 (평일 12:59)"""
     print(f"코너로지스 스케줄 체크: {datetime.now()}")
     
     if should_run_cornerlogis_now_kst():
@@ -587,7 +587,7 @@ async def scheduled_cornerlogis_run():
     else:
         kst = pytz.timezone("Asia/Seoul")
         now = datetime.now(kst)
-        print(f"⏰ 실행 조건 불만족 - {now} (평일 13:30만 실행)")
+        print(f"⏰ 실행 조건 불만족 - {now} (평일 12:59만 실행)")
         return {"status": "skipped", "reason": "cornerlogis_schedule_condition_not_met", "time": now.isoformat()}
 
 
