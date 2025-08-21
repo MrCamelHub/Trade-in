@@ -18,7 +18,7 @@ def index():
         {"path": "/", "method": "GET", "description": "API 엔드포인트 목록"},
         {"path": "/run-shopby", "method": "POST", "description": "샵바이 주문 조회 및 변환"},
         {"path": "/run-cornerlogis", "method": "POST", "description": "코너로지스 출고 업로드"},
-        {"path": "/run-full", "method": "POST", "description": "전체 워크플로우 실행 (샵바이 → 코너로지스 → 샵바이 상태 변경)"},
+        {"path": "/run-full", "method": "POST", "description": "전체 워크플로우 실행 (샵바이 → 코너로지스 → 샵바이 상태 변경). ?skip_cornerlogis=true로 코너로지스 전송 건너뛰기 가능"},
         {"path": "/run-delivery-status-only", "method": "POST", "description": "코너로지스 전송 없이 배송준비중 상태 변경만 처리"},
         {"path": "/test-shopby-delivery-status", "method": "POST", "description": "샵바이 배송준비중 상태 변경 테스트"},
         {"path": "/shopby-raw", "method": "GET", "description": "샵바이 API 원본 응답 확인"},
@@ -102,8 +102,18 @@ def run_cornerlogis():
 def run_full():
     """전체 워크플로우 수동 실행"""
     try:
-        from main import run_full_workflow
-        result = asyncio.run(run_full_workflow())
+        from main import run_full_workflow, run_full_workflow_skip_cornerlogis
+        
+        # 쿼리 파라미터 확인
+        skip_cornerlogis = request.args.get('skip_cornerlogis', 'false').lower() == 'true'
+        
+        if skip_cornerlogis:
+            print("🔄 코너로지스 전송 건너뛰기 모드로 실행")
+            result = asyncio.run(run_full_workflow_skip_cornerlogis())
+        else:
+            print("🔄 전체 워크플로우 실행 (코너로지스 포함)")
+            result = asyncio.run(run_full_workflow())
+        
         return jsonify({
             "status": "success",
             "result": result,

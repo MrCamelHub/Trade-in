@@ -624,6 +624,150 @@ async def run_full_once():
     }
 
 
+async def run_full_workflow_skip_cornerlogis() -> Dict[str, Any]:
+    """
+    코너로지스 전송을 건너뛰는 전체 워크플로우
+    1. 샵바이 API 주문 처리 (조회, 변환)
+    2. 코너로지스 전송 건너뛰기
+    3. 샵바이 상태를 배송준비중으로 변경
+    """
+    config = load_app_config()
+    ensure_data_dirs(config.data_dir)
+    
+    result = {
+        "start_time": datetime.now().isoformat(),
+        "status": "started",
+        "shopby_result": None,
+        "cornerlogis_result": {
+            "status": "skipped",
+            "message": "코너로지스 전송이 건너뛰어졌습니다 (skip_cornerlogis=true)",
+            "cornerlogis_success_count": 0,
+            "cornerlogis_failure_count": 0,
+            "processed_orders": []
+        },
+        "end_time": None
+    }
+    
+    try:
+        print("================================================================================")
+        print("🚀 코너로지스 전송 건너뛰기 모드 - 전체 워크플로우 실행")
+        print("================================================================================")
+        
+        # 1단계: 샵바이 API 주문 처리 (기존과 동일)
+        print("=== 샵바이 API 주문 처리 시작 ===")
+        shopby_result = await process_shopby_orders()
+        result["shopby_result"] = shopby_result
+        
+        if shopby_result["status"] != "completed":
+            error_msg = f"샵바이 주문 처리 실패: {shopby_result.get('message', 'Unknown error')}"
+            print(error_msg)
+            result["status"] = "failed"
+            result["errors"] = shopby_result.get("errors", [error_msg])
+            result["end_time"] = datetime.now().isoformat()
+            return result
+        
+        print("✅ 샵바이 주문 처리 완료")
+        
+        # 2단계: 코너로지스 전송 건너뛰기
+        print("=== 코너로지스 전송 건너뛰기 ===")
+        print("⏭️ 코너로지스 전송이 건너뛰어졌습니다 (skip_cornerlogis=true)")
+        print("✅ 코너로지스 전송 건너뛰기 완료")
+        
+        # 3단계: 샵바이 상태를 배송준비중으로 변경 (기존과 동일)
+        print("=== 샵바이 상태 변경 시작 ===")
+        
+        # 변환된 주문이 있는 경우에만 상태 변경 시도
+        transformed_orders = shopby_result.get("transformed_orders", [])
+        if transformed_orders:
+            print(f"변환된 주문 {len(transformed_orders)}개에 대해 배송준비중 상태 변경 시도")
+            
+            async with ShopbyApiClient(config.shopby) as shopby_client:
+                for i, order in enumerate(transformed_orders):
+                    order_no = order.get("orderNo", f"ORDER_{i+1}")
+                    print(f"주문 {i+1}/{len(transformed_orders)} 상태 변경 중: {order_no}")
+                    
+                    try:
+                        # 주문 상세 조회를 통해 orderOptionNo 추출
+                        order_detail = await shopby_client.get_order_detail(order_no)
+                        order_option_nos = []
+                        
+                        # orderProducts에서 직접 orderOptions 찾기
+                        order_products = order_detail.get('orderProducts', [])
+                        if order_products:
+                            for j, product in enumerate(order_products):
+                                order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
+                                for k, option in enumerate(order_options):
+                                    option_no = option.get('orderOptionNo')  # orderOptionNo 추출
+                                    if option_no is not None:
+                                        order_option_nos.append(option_no)
+                        
+                        if order_option_nos:
+                            # 배송준비중 상태 변경
+                            delivery_result = await shopby_client.prepare_delivery(order_option_nos)
+                            
+                            if delivery_result["status"] == "success":
+                                print(f"✅ 주문 {order_no} 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")
+                                result["cornerlogis_result"]["processed_orders"].append({
+                                    "orderNo": order_no,
+                                    "status": "success",
+                                    "message": f"{delivery_result['processed_count']}개 옵션을 배송준비중 상태로 변경했습니다",
+                                    "processed_options": delivery_result["processed_count"],
+                                    "extracted_options": order_option_nos
+                                })
+                            else:
+                                print(f"❌ 주문 {order_no} 배송준비중 상태 변경 실패: {delivery_result['message']}")
+                                result["cornerlogis_result"]["processed_orders"].append({
+                                    "orderNo": order_no,
+                                    "status": "failed",
+                                    "message": delivery_result["message"],
+                                    "error": delivery_result.get("error", "Unknown error"),
+                                    "extracted_options": order_option_nos
+                                })
+                        else:
+                            print(f"⚠️ 주문 {order_no}에서 주문 옵션 번호를 찾을 수 없습니다.")
+                            result["cornerlogis_result"]["processed_orders"].append({
+                                "orderNo": order_no,
+                                "status": "skipped",
+                                "message": "주문 옵션 번호를 찾을 수 없음",
+                                "extracted_options": []
+                            })
+                            
+                    except Exception as e:
+                        print(f"❌ 주문 {order_no} 상태 변경 중 오류: {str(e)}")
+                        result["cornerlogis_result"]["processed_orders"].append({
+                            "orderNo": order_no,
+                            "status": "error",
+                            "message": f"상태 변경 중 오류: {str(e)}",
+                            "extracted_options": []
+                        })
+                    
+                    # API 호출 간격 조절
+                    if i < len(transformed_orders) - 1:
+                        await asyncio.sleep(1)
+        else:
+            print("변환된 주문이 없어서 상태 변경을 건너뜁니다.")
+        
+        print("✅ 샵바이 상태 변경 완료")
+        
+        # 워크플로우 완료
+        result["status"] = "completed"
+        result["end_time"] = datetime.now().isoformat()
+        
+        print("================================================================================")
+        print("🎯 코너로지스 전송 건너뛰기 모드 - 전체 워크플로우 완료")
+        print("================================================================================")
+        
+        return result
+        
+    except Exception as e:
+        error_msg = f"코너로지스 전송 건너뛰기 워크플로우 중 치명적 오류: {str(e)}"
+        print(error_msg)
+        result["status"] = "failed"
+        result["errors"] = [error_msg]
+        result["end_time"] = datetime.now().isoformat()
+        return result
+
+
 # CLI 인터페이스
 async def main():
     """메인 함수"""
