@@ -64,8 +64,8 @@ async def run_scheduled_sync():
 
 
 async def run_continuous_scheduler():
-    """지속적으로 실행되는 스케줄러 (30분마다 체크)"""
-    print("🚀 지속적 스케줄러 시작 (30분마다 체크)")
+    """지속적으로 실행되는 스케줄러 (1시간마다 실행)"""
+    print("🚀 지속적 스케줄러 시작 (1시간마다 실행)")
     print("=" * 50)
     
     while True:
@@ -73,27 +73,19 @@ async def run_continuous_scheduler():
             kst = pytz.timezone("Asia/Seoul")
             now = datetime.now(kst)
             
-            print(f"\n🕐 스케줄러 체크: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            # 현재 실행해야 하는지 확인 (정시에만)
+            if is_weekday_kst() and now.minute == 0:
+                print(f"\n🕐 [{now.strftime('%H:%M')}] 정시 실행 - 송장번호 동기화 시작")
+                result = await run_scheduled_sync()
+                print(f"📊 실행 결과: {result.get('status', 'unknown')}")
+            elif is_weekday_kst() and now.minute == 30:
+                # 30분에는 조용히 체크만 (로그 없음)
+                pass
+            elif not is_weekday_kst():
+                # 주말/공휴일에는 로그 없이 스킵
+                pass
             
-            # 현재 실행해야 하는지 확인
-            if is_weekday_kst():
-                current_minute = now.minute
-                if current_minute in [0, 30]:  # 0분 또는 30분
-                    print(f"✅ 실행 시간 도달 - 송장번호 동기화 시작")
-                    result = await run_scheduled_sync()
-                    print(f"📊 실행 결과: {result.get('status', 'unknown')}")
-                else:
-                    next_run = None
-                    if current_minute < 30:
-                        next_run = f"{now.strftime('%H')}:30"
-                    else:
-                        next_hour = now.hour + 1
-                        next_run = f"{next_hour:02d}:00"
-                    print(f"⏳ 다음 실행 시간: {next_run}")
-            else:
-                print(f"⏭️ 주말/공휴일 - 스킵")
-            
-            # 1분마다 체크
+            # 1분마다 체크 (로그 최소화)
             await asyncio.sleep(60)
             
         except Exception as e:
