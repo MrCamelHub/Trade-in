@@ -12,29 +12,22 @@ from flask import Flask, jsonify, request
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    """서비스 메인 페이지"""
+def index():
+    """API 엔드포인트 목록"""
+    endpoints = [
+        {"path": "/", "method": "GET", "description": "API 엔드포인트 목록"},
+        {"path": "/run-shopby", "method": "POST", "description": "샵바이 주문 조회 및 변환"},
+        {"path": "/run-cornerlogis", "method": "POST", "description": "코너로지스 출고 업로드"},
+        {"path": "/run-full", "method": "POST", "description": "전체 워크플로우 실행 (샵바이 → 코너로지스 → 샵바이 상태 변경)"},
+        {"path": "/run-delivery-status-only", "method": "POST", "description": "코너로지스 전송 없이 배송준비중 상태 변경만 처리"},
+        {"path": "/test-shopby-delivery-status", "method": "POST", "description": "샵바이 배송준비중 상태 변경 테스트"},
+        {"path": "/shopby-raw", "method": "GET", "description": "샵바이 API 원본 응답 확인"},
+        {"path": "/health", "method": "GET", "description": "API 상태 확인"}
+    ]
+    
     return jsonify({
-        "service": "Bonibello Ship API",
-        "version": "2.0",
-        "description": "샵바이 API → 코너로지스 API 자동 주문 전송",
-        "status": "running",
-        "endpoints": {
-            "/health": "Health check",
-            "/run-shopby": "Manual run Shopby order fetch",
-            "/run-cornerlogis": "Manual run Cornerlogis upload",
-            "/run-full": "Manual run full workflow",
-            "/run-full-test": "Test full workflow with dummy data",
-            "/test": "Test workflow",
-            "/test-cornerlogis-prepare": "Test Cornerlogis preparation (before POST)",
-            "/test-shopby-delivery-status": "Test Shopby delivery status update to 배송준비중",
-            "/status": "Service status",
-            "/schedule": "Check schedule condition"
-        },
-        "schedule": {
-            "shopby": "평일 13:00 KST - 샵바이 주문 조회",
-            "cornerlogis": "평일 13:30 KST - 코너로지스 업로드"
-        },
+        "message": "Bonibello Ship API",
+        "endpoints": endpoints,
         "timestamp": datetime.now().isoformat()
     })
 
@@ -995,6 +988,164 @@ def check_schedule():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/run-delivery-status-only', methods=['POST'])
+async def run_delivery_status_only():
+    """
+    코너로지스 전송 없이 배송준비중 상태 변경만 처리
+    1. 샵바이 최근 주문 조회
+    2. 각 주문의 orderOptionNo 추출
+    3. 배송준비중 상태로 변경
+    """
+    config = load_app_config()
+    ensure_data_dirs(config.data_dir)
+    
+    result = {
+        "status": "started",
+        "timestamp": datetime.now().isoformat(),
+        "start_time": datetime.now().isoformat(),
+        "shopby_result": {
+            "status": "started",
+            "start_time": datetime.now().isoformat(),
+            "shopby_orders_count": 0,
+            "transformed_orders_count": 0,
+            "delivery_status_updated_count": 0,
+            "delivery_status_failed_count": 0,
+            "errors": [],
+            "processed_orders": []
+        },
+        "end_time": None
+    }
+    
+    try:
+        print("=== 배송준비중 상태 변경 전용 워크플로우 실행 ===")
+        
+        # 1단계: 샵바이 최근 주문 조회
+        print("=== 1단계: 샵바이 최근 주문 조회 ===")
+        async with ShopbyApiClient(config.shopby) as shopby_client:
+            shopby_result = await shopby_client.fetch_recent_orders()
+            
+            if shopby_result["status"] == "success":
+                orders = shopby_result.get("orders", [])
+                result["shopby_result"]["shopby_orders_count"] = len(orders)
+                print(f"샵바이 주문 조회 완료: {len(orders)}개")
+                
+                # 2단계: 각 주문의 배송준비중 상태 변경
+                print("=== 2단계: 배송준비중 상태 변경 ===")
+                
+                for i, order in enumerate(orders):
+                    order_no = order.get("orderNo", f"ORDER_{i+1}")
+                    print(f"주문 {i+1}/{len(orders)} 처리 중: {order_no}")
+                    
+                    try:
+                        # 주문 상세 조회를 통해 orderOptionNo 추출
+                        order_detail = await shopby_client.get_order_detail(order_no)
+                        order_option_nos = []
+                        
+                        # orderProducts에서 직접 orderOptions 찾기
+                        order_products = order_detail.get('orderProducts', [])
+                        if order_products:
+                            print(f"  📦 orderProducts에서 orderOptionNo 찾기 (길이: {len(order_products)})")
+                            for j, product in enumerate(order_products):
+                                print(f"    상품 {j+1}: {product.get('productName', 'UNKNOWN')}")
+                                
+                                order_options = product.get('orderOptions', [])  # 배송준비중 상태 변경용: orderOptions 사용
+                                for k, option in enumerate(order_options):
+                                    option_no = option.get('orderOptionNo')  # orderOptionNo 추출
+                                    if option_no is not None:
+                                        order_option_nos.append(option_no)
+                                        print(f"      옵션 {k+1}: {option_no}")
+                        
+                        if order_option_nos:
+                            print(f"  ✅ 추출된 orderOptionNo: {order_option_nos}")
+                            
+                            # 배송준비중 상태 변경
+                            delivery_result = await shopby_client.prepare_delivery(order_option_nos)
+                            
+                            if delivery_result["status"] == "success":
+                                print(f"✅ 주문 {order_no} 배송준비중 상태 변경 성공: {delivery_result['processed_count']}개 옵션")
+                                result["shopby_result"]["delivery_status_updated_count"] += 1
+                                result["shopby_result"]["processed_orders"].append({
+                                    "orderNo": order_no,
+                                    "status": "success",
+                                    "message": f"{delivery_result['processed_count']}개 옵션을 배송준비중 상태로 변경했습니다",
+                                    "processed_options": delivery_result["processed_count"],
+                                    "extracted_options": order_option_nos
+                                })
+                            else:
+                                print(f"❌ 주문 {order_no} 배송준비중 상태 변경 실패: {delivery_result['message']}")
+                                result["shopby_result"]["delivery_status_failed_count"] += 1
+                                result["shopby_result"]["processed_orders"].append({
+                                    "orderNo": order_no,
+                                    "status": "failed",
+                                    "message": delivery_result["message"],
+                                    "error": delivery_result.get("error", "Unknown error"),
+                                    "extracted_options": order_option_nos
+                                })
+                        else:
+                            print(f"⚠️ 주문 {order_no}에서 주문 옵션 번호를 찾을 수 없습니다.")
+                            result["shopby_result"]["processed_orders"].append({
+                                "orderNo": order_no,
+                                "status": "skipped",
+                                "message": "주문 옵션 번호를 찾을 수 없음",
+                                "extracted_options": []
+                            })
+                            
+                    except Exception as e:
+                        print(f"❌ 주문 {order_no} 처리 중 오류: {str(e)}")
+                        result["shopby_result"]["errors"].append({
+                            "order_no": order_no,
+                            "error": str(e)
+                        })
+                        result["shopby_result"]["processed_orders"].append({
+                            "orderNo": order_no,
+                            "status": "error",
+                            "message": f"처리 중 오류: {str(e)}",
+                            "extracted_options": []
+                        })
+                    
+                    # API 호출 간격 조절
+                    if i < len(orders) - 1:
+                        await asyncio.sleep(1)
+                
+                result["shopby_result"]["status"] = "completed"
+                result["shopby_result"]["end_time"] = datetime.now().isoformat()
+                result["status"] = "completed"
+                result["end_time"] = datetime.now().isoformat()
+                
+                print("=== 배송준비중 상태 변경 완료 ===")
+                print(f"성공: {result['shopby_result']['delivery_status_updated_count']}개 주문")
+                print(f"실패: {result['shopby_result']['delivery_status_failed_count']}개 주문")
+                print(f"건너뜀: {len([o for o in result['shopby_result']['processed_orders'] if o['status'] == 'skipped'])}개 주문")
+                
+            else:
+                error_msg = f"샵바이 주문 조회 실패: {shopby_result.get('message', 'Unknown error')}"
+                print(error_msg)
+                result["shopby_result"]["status"] = "failed"
+                result["shopby_result"]["errors"].append(error_msg)
+                result["status"] = "failed"
+                result["end_time"] = datetime.now().isoformat()
+        
+        return jsonify({
+            "status": "success",
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        error_msg = f"배송준비중 상태 변경 워크플로우 중 치명적 오류: {str(e)}"
+        print(error_msg)
+        result["status"] = "failed"
+        result["shopby_result"]["status"] = "failed"
+        result["shopby_result"]["errors"].append(error_msg)
+        result["end_time"] = datetime.now().isoformat()
+        
+        return jsonify({
+            "status": "error",
+            "message": error_msg,
+            "result": result,
+            "timestamp": datetime.now().isoformat()
+        }), 500
 
 if __name__ == '__main__':
     # 스케줄러 초기화 및 시작
