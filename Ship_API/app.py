@@ -1029,7 +1029,7 @@ def run_delivery_status_only():
         
         async def run_delivery_status_workflow():
             async with ShopbyApiClient(config.shopby) as shopby_client:
-                shopby_result = await shopby_client.fetch_recent_orders()
+                shopby_result = await shopby_client.get_pay_done_orders_adaptive()
                 
                 if shopby_result["status"] == "success":
                     orders = shopby_result.get("orders", [])
