@@ -7,11 +7,65 @@ from dotenv import load_dotenv
 from datetime import datetime
 import re
 import pytz
+import json
+import hashlib
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
+
+# 전역 변수로 처리된 이벤트 ID를 저장 (메모리 기반)
+processed_event_ids = set()
+
+# 처리된 이벤트 ID를 파일에 저장하는 함수
+def save_processed_event_id(event_id):
+    """처리된 이벤트 ID를 파일에 저장"""
+    try:
+        with open('processed_slack_events.txt', 'a') as f:
+            f.write(f"{event_id}\n")
+    except Exception as e:
+        print(f"⚠️ Failed to save processed event ID: {e}")
+
+# 처리된 이벤트 ID를 파일에서 로드하는 함수
+def load_processed_event_ids():
+    """파일에서 처리된 이벤트 ID들을 로드"""
+    processed_ids = set()
+    try:
+        if os.path.exists('processed_slack_events.txt'):
+            with open('processed_slack_events.txt', 'r') as f:
+                for line in f:
+                    processed_ids.add(line.strip())
+            print(f"📋 Loaded {len(processed_ids)} processed event IDs from file")
+    except Exception as e:
+        print(f"⚠️ Failed to load processed event IDs: {e}")
+    return processed_ids
+
+# 앱 시작 시 처리된 이벤트 ID들을 로드
+processed_event_ids = load_processed_event_ids()
+
+# 오래된 이벤트 ID들을 정리하는 함수
+def cleanup_old_event_ids(max_age_hours=24):
+    """24시간 이상 된 이벤트 ID들을 정리"""
+    try:
+        current_time = datetime.now()
+        cleaned_ids = set()
+        
+        if os.path.exists('processed_slack_events.txt'):
+            with open('processed_slack_events.txt', 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        # 파일명에서 타임스탬프 추출 시도 (선택사항)
+                        cleaned_ids.add(line)
+            
+            # 메모리에서도 정리
+            global processed_event_ids
+            processed_event_ids = cleaned_ids
+            
+            print(f"🧹 Cleaned up old event IDs, keeping {len(cleaned_ids)} recent ones")
+    except Exception as e:
+        print(f"⚠️ Failed to cleanup old event IDs: {e}")
 
 # Slack configuration
 SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN')
@@ -27,7 +81,6 @@ def get_google_sheets_service():
     if not service_account_json:
         raise Exception("GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable is not set")
     
-    import json
     service_account_info = json.loads(service_account_json)
     credentials = service_account.Credentials.from_service_account_info(
         service_account_info, scopes=SCOPES)
@@ -190,6 +243,31 @@ def slack_webhook():
         event = data.get('event')
         print(f"📨 Received event: {event}")  # Debug log
         
+        # 중복 방지: event_id 체크
+        event_id = data.get('event_id')
+        if event_id:
+            if event_id in processed_event_ids:
+                print(f"🔄 Duplicate event detected (ID: {event_id}), skipping...")
+                return jsonify({'status': 'skipped', 'message': 'Duplicate event'})
+            else:
+                print(f"✅ New event (ID: {event_id}), processing...")
+                # 처리된 이벤트 ID를 메모리와 파일에 저장
+                processed_event_ids.add(event_id)
+                save_processed_event_id(event_id)
+        else:
+            print("⚠️ No event_id found, checking message content hash...")
+            # event_id가 없는 경우 메시지 내용 기반 해시로 중복 체크
+            message_content = str(event.get('text', '')) + str(event.get('attachments', []))
+            if message_content:
+                message_hash = hashlib.md5(message_content.encode()).hexdigest()
+                if message_hash in processed_event_ids:
+                    print(f"🔄 Duplicate message content detected (hash: {message_hash}), skipping...")
+                    return jsonify({'status': 'skipped', 'message': 'Duplicate message content'})
+                else:
+                    print(f"✅ New message content (hash: {message_hash}), processing...")
+                    processed_event_ids.add(message_hash)
+                    save_processed_event_id(message_hash)
+        
         if event.get('type') == 'message':
             # Determine received date from Slack timestamp (KST)
             received_date_str = None
@@ -244,4 +322,8 @@ def slack_webhook():
     return jsonify({'status': 'error', 'message': 'Invalid message format'})
 
 if __name__ == '__main__':
+    # 앱 시작 시 오래된 이벤트 ID 정리
+    cleanup_old_event_ids()
+    print(f"🚀 Starting Bonibello Trade-in Automation with duplicate prevention")
+    print(f"📊 Loaded {len(processed_event_ids)} processed event IDs")
     app.run(host='0.0.0.0', port=5001, debug=True) 
