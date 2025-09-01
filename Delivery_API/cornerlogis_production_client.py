@@ -256,6 +256,94 @@ class CornerlogisProductionClient:
             return company_order_id.split(" (N:")[0]
         return company_order_id
 
+    async def get_order_by_company_order_no_and_invoice(
+        self,
+        company_order_no: str,
+        invoice_no: str,
+        days_back: int = 30
+    ) -> Optional[Dict[str, Any]]:
+        """
+        특정 주문번호와 송장번호로 주문 정보 조회
+        
+        Args:
+            company_order_no: 회사 주문번호 (예: 202508261223085290)
+            invoice_no: 송장번호 (예: 75535583)
+            days_back: 몇 일 전부터 조회할지 (기본값: 30일)
+            
+        Returns:
+            주문 정보 또는 None
+        """
+        print(f"🔍 특정 주문 조회: 주문번호={company_order_no}, 송장번호={invoice_no}")
+        
+        # 날짜 범위 계산
+        from datetime import datetime, timedelta
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+        
+        print(f"   📅 검색 기간: {start_date} ~ {end_date}")
+        
+        # 출고 진행 중과 출고 완료 상태 모두 조회
+        progressing_orders = await self.get_orders_with_invoices(
+            "PROGRESSING_SHIPMENTS", 
+            100, 
+            start_date, 
+            end_date
+        )
+        completed_orders = await self.get_orders_with_invoices(
+            "COMPLETED_SHIPMENTS", 
+            100, 
+            start_date, 
+            end_date
+        )
+        
+        all_orders = progressing_orders + completed_orders
+        print(f"   📊 총 조회된 주문: {len(all_orders)}건")
+        
+        # 주문번호와 송장번호로 필터링
+        for order in all_orders:
+            if "orderItems" in order:
+                for item in order["orderItems"]:
+                    delivery = item.get("delivery", {})
+                    current_invoice_no = delivery.get("code")
+                    
+                    # 주문번호와 송장번호 모두 일치하는지 확인
+                    if (order.get("companyOrderId", "").startswith(company_order_no) and 
+                        current_invoice_no == invoice_no):
+                        
+                        print(f"✅ 주문을 찾았습니다!")
+                        
+                        order_info = {
+                            "cornerOrderId": order.get("cornerOrderId"),
+                            "companyOrderId": order.get("companyOrderId"),
+                            "orderAt": order.get("orderAt"),
+                            "customer": order.get("customer"),
+                            "invoiceNo": current_invoice_no,
+                            "pickupCompleteAt": delivery.get("pickupCompleteAt"),
+                            "arrivalAt": delivery.get("arrivalAt"),
+                            "status": item.get("status"),
+                            "orderItem": item,
+                            "delivery": delivery
+                        }
+                        
+                        print(f"   📋 주문 정보:")
+                        print(f"     - 코너로지스 주문ID: {order_info['cornerOrderId']}")
+                        print(f"     - 회사 주문번호: {order_info['companyOrderId']}")
+                        print(f"     - 송장번호: {order_info['invoiceNo']}")
+                        print(f"     - 주문일시: {order_info['orderAt']}")
+                        print(f"     - 픽업완료일시: {order_info['pickupCompleteAt']}")
+                        print(f"     - 도착일시: {order_info['arrivalAt']}")
+                        print(f"     - 상태: {order_info['status']}")
+                        
+                        if order_info['arrivalAt']:
+                            print(f"   ✅ arrivalAt이 입력되어 있습니다: {order_info['arrivalAt']}")
+                        else:
+                            print(f"   ❌ arrivalAt이 입력되어 있지 않습니다")
+                        
+                        return order_info
+        
+        print(f"❌ 주문번호 {company_order_no}와 송장번호 {invoice_no}에 해당하는 주문을 찾을 수 없습니다.")
+        return None
+
 
 # 테스트 함수
 async def test_cornerlogis_production():
@@ -279,5 +367,23 @@ async def test_cornerlogis_production():
             print(f"  상태: {sample.get('status')}")
 
 
+async def test_specific_order():
+    """특정 주문 조회 테스트"""
+    async with CornerlogisProductionClient() as client:
+        company_order_no = "202508261223085290"
+        invoice_no = "75535583"
+        
+        print(f"🔍 주문번호 {company_order_no}, 송장번호 {invoice_no} 조회 중...")
+        
+        order_info = await client.get_order_by_company_order_no_and_invoice(
+            company_order_no, 
+            invoice_no
+        )
+        
+        return order_info
+
+
 if __name__ == "__main__":
-    asyncio.run(test_cornerlogis_production())
+    # 특정 주문 조회 테스트 실행
+    print("🎯 특정 주문 arrivalAt 확인 테스트")
+    asyncio.run(test_specific_order())

@@ -29,7 +29,8 @@ def home():
             "/test": "Test workflow",
             "/execute": "전체 워크플로우 실행 (항상 dry_run=false)",
             "/scheduler/status": "스케줄러 상태 확인",
-            "/scheduler/start": "스케줄러 시작 (백그라운드)"
+            "/scheduler/start": "스케줄러 시작 (백그라운드)",
+            "/exclusions": "제외 주문 목록 조회/관리"
         },
         "timestamp": datetime.now().isoformat()
     })
@@ -245,6 +246,40 @@ def start_scheduler():
             "timestamp": datetime.now().isoformat()
         })
         
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/exclusions', methods=['GET'])
+def get_exclusions():
+    """제외 주문 목록 조회"""
+    try:
+        from invoice_tracker import InvoiceTracker
+        
+        # InvoiceTracker 인스턴스 생성해서 제외 목록 조회
+        tracker = InvoiceTracker()
+        exclusions = tracker.excluded_orders
+        
+        return jsonify({
+            "status": "success",
+            "excluded_orders": exclusions,
+            "count": len(exclusions),
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/exclusions/<order_no>', methods=['DELETE'])
+def remove_exclusion(order_no):
+    """특정 주문을 제외 목록에서 제거"""
+    try:
+        # 실제 운영 환경에서는 데이터베이스나 파일에서 관리해야 함
+        # 현재는 메모리에서만 관리되므로 서버 재시작 시 초기화됨
+        return jsonify({
+            "status": "info",
+            "message": f"주문번호 {order_no} 제외 해제 요청을 받았습니다. 현재는 코드 수정이 필요합니다.",
+            "note": "제외 목록은 invoice_tracker.py 파일에서 관리됩니다.",
+            "timestamp": datetime.now().isoformat()
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

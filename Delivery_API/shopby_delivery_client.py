@@ -274,8 +274,58 @@ async def test_shopby_delivery():
             #         shipping_no=original_delivery_no,
             #         invoice_no="6896724069501"  # 테스트 송장번호
             #     )
-            #     print(f"상태 변경 결과: {success}")
+            #                 print(f"상태 변경 결과: {success}")
+
+
+async def test_check_order_202508261018087924():
+    """주문번호 202508261018087924 상태 확인 테스트"""
+    async with ShopbyDeliveryClient() as client:
+        print("🚀 주문번호 202508261018087924 상태 확인 테스트 시작...")
+        print("=" * 60)
+        
+        # 주문번호 202508261018087924으로 주문 상세 조회
+        order_no = "202508261018087924"
+        
+        print(f"📦 조회할 주문 정보:")
+        print(f"  주문번호: {order_no}")
+        print(f"  예상 배송번호: 75526782")
+        print("=" * 60)
+        
+        # 주문 상세 조회
+        order_details = await client.get_order_details(order_no)
+        
+        if order_details:
+            print(f"✅ 주문 조회 성공!")
+            print(f"📋 주문 상세 정보:")
+            print(f"  주문번호: {order_details.get('orderNo', 'N/A')}")
+            print(f"  배송번호(originalDeliveryNo): {order_details.get('originalDeliveryNo', 'N/A')}")
+            print(f"  결제방법: {order_details.get('payType', 'N/A')}")
+            
+            # 배송 그룹 정보
+            delivery_groups = order_details.get('deliveryGroups', [])
+            if delivery_groups:
+                print(f"📦 배송 그룹 정보:")
+                for i, group in enumerate(delivery_groups):
+                    print(f"  그룹 {i+1}:")
+                    print(f"    송장번호: {group.get('invoiceNo', 'N/A')}")
+                    
+                    # 주문 상품 정보
+                    order_products = group.get('orderProducts', [])
+                    if order_products:
+                        for j, product in enumerate(order_products):
+                            print(f"    상품 {j+1}:")
+                            options = product.get('orderProductOptions', [])
+                            if options:
+                                for k, option in enumerate(options):
+                                    print(f"      옵션 {k+1}:")
+                                    print(f"        주문상태: {option.get('orderStatusType', 'N/A')}")
+                                    print(f"        배송상태: {option.get('deliveryStatusType', 'N/A')}")
+        else:
+            print(f"❌ 주문 조회 실패!")
+        
+        return order_details
 
 
 if __name__ == "__main__":
-    asyncio.run(test_shopby_delivery())
+    # asyncio.run(test_shopby_delivery())
+    asyncio.run(test_check_order_202508261018087924())

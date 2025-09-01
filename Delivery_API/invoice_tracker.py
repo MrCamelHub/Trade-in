@@ -18,6 +18,15 @@ class InvoiceTracker:
     def __init__(self):
         self.cornerlogis_client = CornerlogisProductionClient()
         self.shopby_client = ShopbyDeliveryClient()
+        
+        # 제외할 주문 정보 설정
+        self.excluded_orders = {
+            "202508310722335114": {  # 주문번호
+                "shipping_no": "75802477",  # 배송번호
+                "sku": "50004234",  # SKU
+                "reason": "사용자 요청으로 배송 처리 제외"
+            }
+        }
     
     async def __aenter__(self):
         await self.cornerlogis_client.__aenter__()
@@ -27,6 +36,35 @@ class InvoiceTracker:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.cornerlogis_client.__aexit__(exc_type, exc_val, exc_tb)
         await self.shopby_client.__aexit__(exc_type, exc_val, exc_tb)
+    
+    def is_order_excluded(self, order_info: Dict[str, Any]) -> Tuple[bool, str]:
+        """
+        주문이 제외 대상인지 확인
+        
+        Args:
+            order_info: 주문 정보
+            
+        Returns:
+            (제외 여부, 제외 사유)
+        """
+        # 샵바이 주문번호 추출
+        company_order_id = order_info.get("companyOrderId", "")
+        shopby_order_no = self.cornerlogis_client.extract_shopby_order_no(company_order_id)
+        
+        # 제외 대상 주문인지 확인
+        if shopby_order_no in self.excluded_orders:
+            excluded_info = self.excluded_orders[shopby_order_no]
+            reason = excluded_info["reason"]
+            
+            print(f"   🚫 제외 대상 주문 발견:")
+            print(f"     주문번호: {shopby_order_no}")
+            print(f"     배송번호: {excluded_info['shipping_no']}")
+            print(f"     SKU: {excluded_info['sku']}")
+            print(f"     제외 사유: {reason}")
+            
+            return True, reason
+        
+        return False, ""
     
     async def get_orders_needing_update(self) -> List[Dict[str, Any]]:
         """
@@ -49,6 +87,13 @@ class InvoiceTracker:
         
         for i, order in enumerate(cornerlogis_orders, 1):
             print(f"\n📦 [{i}/{len(cornerlogis_orders)}] 주문 분석 중...")
+            
+            # 1.5. 제외 대상 주문인지 확인
+            is_excluded, exclusion_reason = self.is_order_excluded(order)
+            if is_excluded:
+                print(f"   ⏸️ 제외 대상 주문: {exclusion_reason}")
+                skip_count += 1
+                continue
             
             # 2. 샵바이 주문번호 추출
             shopby_order_no = self.cornerlogis_client.extract_shopby_order_no(
@@ -302,6 +347,13 @@ class InvoiceTracker:
         
         for i, order in enumerate(arrived_orders, 1):
             print(f"\n📦 [{i}/{len(arrived_orders)}] 배송완료 주문 분석 중...")
+            
+            # 1.5. 제외 대상 주문인지 확인
+            is_excluded, exclusion_reason = self.is_order_excluded(order)
+            if is_excluded:
+                print(f"   ⏸️ 제외 대상 주문: {exclusion_reason}")
+                skip_count += 1
+                continue
             
             # 2. 샵바이 주문번호 추출
             shopby_order_no = self.cornerlogis_client.extract_shopby_order_no(
