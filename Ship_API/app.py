@@ -517,7 +517,7 @@ def test_goods_id_conversion():
             
             # 1. 샵바이 주문 조회
             async with ShopbyApiClient(config.shopby) as shopby_client:
-                shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=30, chunk_days=1)
+                shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
             
             if not shopby_orders:
                 return {"error": "처리할 주문이 없습니다"}

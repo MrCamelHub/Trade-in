@@ -38,7 +38,9 @@ class ShopbyApiClient:
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        order_status: str = "PAY_DONE"
+        order_status: str = "PAY_DONE",
+        page: int = 1,
+        size: int = 200
     ) -> List[Dict[str, Any]]:
         """
         결제완료 주문 목록 조회
@@ -69,7 +71,9 @@ class ShopbyApiClient:
         params = {
             "startYmdt": start_date.strftime("%Y-%m-%d %H:%M:%S"),
             "endYmdt": end_date.strftime("%Y-%m-%d %H:%M:%S"),
-            "orderRequestTypes": order_status
+            "orderRequestTypes": order_status,
+            "pageNumber": page,
+            "pageSize": size
         }
         
         url = f"{self.config.base_url}/orders"
@@ -225,13 +229,13 @@ class ShopbyApiClient:
     
     async def get_all_pay_done_orders(
         self,
-        days_back: int = 30
+        days_back: int = 7
     ) -> List[Dict[str, Any]]:
         """
         모든 결제완료(PAY_DONE) 주문 조회
         
         Args:
-            days_back: 조회 기간 (기본 30일, 충분히 큰 값 설정 가능)
+            days_back: 조회 기간 (기본 7일, 충분히 큰 값 설정 가능)
         
         Returns:
             모든 결제완료 주문 목록
@@ -258,7 +262,7 @@ class ShopbyApiClient:
 
     async def get_pay_done_orders_chunked(
         self,
-        days_back: int = 30,
+        days_back: int = 7,
         chunk_days: int = 1
     ) -> List[Dict[str, Any]]:
         """
@@ -302,7 +306,7 @@ class ShopbyApiClient:
 
     async def get_pay_done_orders_adaptive(
         self,
-        days_back: int = 30,
+        days_back: int = 7,
         chunk_days: int = 1
     ) -> List[Dict[str, Any]]:
         """
@@ -314,10 +318,65 @@ class ShopbyApiClient:
             end_dt_kst = utc_now.replace(tzinfo=pytz.UTC).astimezone(kst)
             start_dt_kst = end_dt_kst - timedelta(days=days_back)
             print(f"🟢 단일 범위 조회 시도: {start_dt_kst} ~ {end_dt_kst}")
-            return await self.get_orders(start_date=start_dt_kst, end_date=end_dt_kst, order_status="PAY_DONE")
+            return await self.get_all_orders_paginated(start_date=start_dt_kst, end_date=end_dt_kst, order_status="PAY_DONE")
         except Exception as e:
             print(f"⚠️ 단일 범위 조회 실패, 청크로 폴백: {e}")
             return await self.get_pay_done_orders_chunked(days_back=days_back, chunk_days=chunk_days)
+
+    async def get_all_orders_paginated(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        order_status: str = "PAY_DONE",
+        page_size: int = 200
+    ) -> List[Dict[str, Any]]:
+        """
+        모든 페이지를 순회하여 전체 주문 조회
+        
+        Args:
+            start_date: 조회 시작일시
+            end_date: 조회 종료일시
+            order_status: 주문 상태
+            page_size: 페이지 크기 (최대 200)
+        
+        Returns:
+            전체 주문 목록
+        """
+        all_orders = []
+        page = 1
+        
+        while True:
+            print(f"📄 페이지 {page} 조회 중... (현재까지 {len(all_orders)}개 주문)")
+            
+            try:
+                orders = await self.get_orders(
+                    start_date=start_date,
+                    end_date=end_date,
+                    order_status=order_status,
+                    page=page,
+                    size=page_size
+                )
+                
+                if not orders:
+                    print(f"📄 페이지 {page}에서 주문이 없음. 조회 완료.")
+                    break
+                
+                all_orders.extend(orders)
+                print(f"📄 페이지 {page}에서 {len(orders)}개 주문 조회됨 (총 {len(all_orders)}개)")
+                
+                # 페이지 크기보다 적은 수가 반환되면 마지막 페이지
+                if len(orders) < page_size:
+                    print(f"📄 마지막 페이지 도달. 조회 완료.")
+                    break
+                
+                page += 1
+                
+            except Exception as e:
+                print(f"❌ 페이지 {page} 조회 실패: {e}")
+                break
+        
+        print(f"✅ 전체 주문 조회 완료: {len(all_orders)}개")
+        return all_orders
 
     def extract_order_option_nos(self, order: Dict[str, Any]) -> List[int]:
         """
