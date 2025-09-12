@@ -98,8 +98,30 @@ def load_sku_mapping_from_sheets(
         # Google Sheets API 서비스 생성
         service = build('sheets', 'v4', credentials=creds)
         
-        # 시트 데이터 조회 - 충분히 큰 범위로 설정 (최대 5000행)
-        range_name = f"{tab_name}!{cornerlogis_sku_col}1:{shopby_sku_col}5000"
+        # 시트 데이터 조회 - 동적으로 행 수 확인
+        # 먼저 시트의 전체 행 수를 확인
+        try:
+            # 시트 메타데이터 조회
+            sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+            sheets = sheet_metadata.get('sheets', [])
+            target_sheet = None
+            for sheet in sheets:
+                if sheet['properties']['title'] == tab_name:
+                    target_sheet = sheet
+                    break
+            
+            if target_sheet:
+                max_rows = target_sheet['properties']['gridProperties']['rowCount']
+                print(f"📊 시트 '{tab_name}'의 총 행 수: {max_rows}")
+            else:
+                max_rows = 10000  # 기본값
+                print(f"📊 시트 '{tab_name}'을 찾을 수 없음. 기본값 10000 사용")
+        except Exception as e:
+            max_rows = 10000  # 기본값
+            print(f"📊 시트 메타데이터 조회 실패: {e}. 기본값 10000 사용")
+        
+        # 실제 데이터 조회
+        range_name = f"{tab_name}!{cornerlogis_sku_col}1:{shopby_sku_col}{max_rows}"
         print(f"📊 구글 시트 조회: {range_name}")
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
