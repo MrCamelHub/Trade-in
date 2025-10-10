@@ -229,7 +229,7 @@ class ShopbyApiClient:
     
     async def get_all_pay_done_orders(
         self,
-        days_back: int = 7
+        days_back: int
     ) -> List[Dict[str, Any]]:
         """
         모든 결제완료(PAY_DONE) 주문 조회
