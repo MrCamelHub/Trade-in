@@ -72,6 +72,7 @@ class ShopbyApiClient:
             "startYmdt": start_date.strftime("%Y-%m-%d %H:%M:%S"),
             "endYmdt": end_date.strftime("%Y-%m-%d %H:%M:%S"),
             "orderRequestTypes": order_status,
+            "searchDateType": "PAY_DONE",  # 결제일시 기준으로 조회
             "pageNumber": page,
             "pageSize": size
         }
@@ -262,7 +263,7 @@ class ShopbyApiClient:
 
     async def get_pay_done_orders_chunked(
         self,
-        days_back: int = 7,
+        days_back: int = 14,  # 2주로 변경
         chunk_days: int = 1
     ) -> List[Dict[str, Any]]:
         """
@@ -306,7 +307,7 @@ class ShopbyApiClient:
 
     async def get_pay_done_orders_adaptive(
         self,
-        days_back: int = 7,
+        days_back: int = 14,  # 2주로 변경
         chunk_days: int = 1
     ) -> List[Dict[str, Any]]:
         """

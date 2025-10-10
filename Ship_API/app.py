@@ -539,7 +539,7 @@ def test_goods_id_conversion():
             
             # 1. 샵바이 주문 조회
             async with ShopbyApiClient(config.shopby) as shopby_client:
-                shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
+                shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=14, chunk_days=1)
             
             if not shopby_orders:
                 return {"error": "처리할 주문이 없습니다"}
@@ -642,7 +642,7 @@ def test_cornerlogis_prepare():
                 # 1단계: 샵바이 주문 조회
                 print("=== 1단계: 샵바이 주문 조회 ===")
                 async with ShopbyApiClient(config.shopby) as shopby_client:
-                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
+                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=14, chunk_days=1)
                 
                 result["steps"]["shopby_fetch"] = {
                     "status": "success",
@@ -779,7 +779,7 @@ def test_shopby_delivery_status():
                 # 1단계: 샵바이에서 최근 주문 조회
                 print("=== 1단계: 샵바이 최근 주문 조회 ===")
                 async with ShopbyApiClient(config.shopby) as shopby_client:
-                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
+                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=14, chunk_days=1)
                 
                 if not shopby_orders:
                     result["errors"].append("처리할 주문이 없습니다")
