@@ -273,6 +273,28 @@ def shopby_raw():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/get-order/<order_no>')
+def get_order(order_no):
+    """특정 주문번호로 주문 조회"""
+    try:
+        import asyncio
+        from config import load_app_config
+        from shopby_api_client import ShopbyApiClient
+
+        async def run():
+            config = load_app_config()
+            async with ShopbyApiClient(config.shopby) as client:
+                return await client.get_order_by_number(order_no)
+
+        result = asyncio.run(run())
+        return jsonify({
+            "order_no": order_no,
+            "found": result is not None,
+            "order": result
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/get-new-token', methods=['POST'])
 def get_new_token():
     """Railway IP에서 새로운 샵바이 토큰 발급"""
@@ -517,7 +539,7 @@ def test_goods_id_conversion():
             
             # 1. 샵바이 주문 조회
             async with ShopbyApiClient(config.shopby) as shopby_client:
-                shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=10, chunk_days=1)
+                shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
             
             if not shopby_orders:
                 return {"error": "처리할 주문이 없습니다"}
@@ -620,7 +642,7 @@ def test_cornerlogis_prepare():
                 # 1단계: 샵바이 주문 조회
                 print("=== 1단계: 샵바이 주문 조회 ===")
                 async with ShopbyApiClient(config.shopby) as shopby_client:
-                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=10, chunk_days=1)
+                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
                 
                 result["steps"]["shopby_fetch"] = {
                     "status": "success",
@@ -757,7 +779,7 @@ def test_shopby_delivery_status():
                 # 1단계: 샵바이에서 최근 주문 조회
                 print("=== 1단계: 샵바이 최근 주문 조회 ===")
                 async with ShopbyApiClient(config.shopby) as shopby_client:
-                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=10, chunk_days=1)
+                    shopby_orders = await shopby_client.get_pay_done_orders_adaptive(days_back=7, chunk_days=1)
                 
                 if not shopby_orders:
                     result["errors"].append("처리할 주문이 없습니다")

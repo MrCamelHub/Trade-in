@@ -323,6 +323,62 @@ class ShopbyApiClient:
             print(f"⚠️ 단일 범위 조회 실패, 청크로 폴백: {e}")
             return await self.get_pay_done_orders_chunked(days_back=days_back, chunk_days=chunk_days)
 
+    async def get_order_by_number(self, order_no: str) -> Optional[Dict[str, Any]]:
+        """
+        특정 주문번호로 주문 조회
+        
+        Args:
+            order_no: 조회할 주문번호
+        
+        Returns:
+            주문 정보 또는 None
+        """
+        if not self.session:
+            raise RuntimeError("ClientSession not initialized. Use async context manager.")
+        
+        # 쿼리 파라미터 설정 (주문번호 검색)
+        params = {
+            "searchType": "ORDER_NO",
+            "searchValues": order_no,
+            "orderRequestTypes": "PAY_DONE",
+            "pageNumber": 1,
+            "pageSize": 200
+        }
+        
+        url = f"{self.config.base_url}/orders"
+        headers = self._get_headers()
+        
+        try:
+            from urllib.parse import urlencode, quote
+            encoded_params = urlencode(params, quote_via=quote)
+            full_url = f"{url}?{encoded_params}"
+            
+            print(f"🔍 특정 주문 조회: {order_no}")
+            print(f"  URL: {full_url}")
+            
+            async with self.session.get(full_url, headers=headers) as response:
+                print(f"  Response Status: {response.status}")
+                response.raise_for_status()
+                
+                data = await response.json()
+                print(f"  Response Data: {data}")
+                
+                if isinstance(data, dict) and "contents" in data:
+                    contents = data["contents"]
+                    if contents:
+                        print(f"✅ 주문 발견: {order_no}")
+                        return contents[0]
+                    else:
+                        print(f"❌ 주문 없음: {order_no}")
+                        return None
+                else:
+                    print(f"❌ 잘못된 응답 형식: {data}")
+                    return None
+                    
+        except Exception as e:
+            print(f"❌ 주문 조회 실패: {e}")
+            return None
+
     async def get_all_orders_paginated(
         self,
         start_date: Optional[datetime] = None,
