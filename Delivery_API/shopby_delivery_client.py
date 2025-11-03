@@ -169,7 +169,7 @@ class ShopbyDeliveryClient:
         self,
         shipping_no: str,
         invoice_no: str,
-        delivery_company_type: str = "POST",
+        delivery_company_type: str = "LOTTE",
         order_status_type: str = "DELIVERY_ING"
     ) -> bool:
         """

@@ -198,9 +198,9 @@ class InvoiceTracker:
         return update_candidates
     
     async def update_order_status(
-        self, 
+        self,
         update_info: Dict[str, Any],
-        delivery_company_type: str = "POST",
+        delivery_company_type: str = "LOTTE",
         order_status_type: str = "DELIVERY_ING"
     ) -> bool:
         """
@@ -488,7 +488,7 @@ class InvoiceTracker:
                 success = await self.shopby_client.change_order_status_by_shipping_no(
                     shipping_no=original_delivery_no,
                     invoice_no=invoice_no,
-                    delivery_company_type="POST",
+                    delivery_company_type="LOTTE",
                     order_status_type="DELIVERY_DONE"
                 )
                 # API 호출 간격 조절
